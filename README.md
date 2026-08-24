@@ -23,10 +23,14 @@ pip install pygame pillow
 
 ### Iniciar o jogo
 
+Entre na pasta que contém o `main.py` (não na pasta do usuário `C:\Users\...`). No Desktop deste projeto:
+
 ```powershell
-cd yaguar_game
+cd $HOME\Desktop\Yaguar_O_Guardiao_da_Floresta\yaguar_game
 python main.py
 ```
+
+Se você clonou o repositório `YaguarGame2D`, a raiz do clone já é essa pasta — basta `cd` até ela e rodar `python main.py`.
 
 O `main.py` gera placeholders em `assets/` se faltarem e abre o menu ritual.
 
