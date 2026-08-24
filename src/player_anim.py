@@ -28,10 +28,27 @@ TARGET_H = 168
 WHITE = (255, 255, 255)
 TOL = 34
 SOFT = 20
+HOLE_MIN_AREA = 4
+NEIGHBORS4 = ((1, 0), (-1, 0), (0, 1), (0, -1))
+NEIGHBORS8 = NEIGHBORS4 + ((1, 1), (1, -1), (-1, 1), (-1, -1))
 
 
 def _dist(c0: tuple[int, int, int], c1: tuple[int, int, int]) -> float:
     return ((c0[0] - c1[0]) ** 2 + (c0[1] - c1[1]) ** 2 + (c0[2] - c1[2]) ** 2) ** 0.5
+
+
+def _is_background(r: int, g: int, b: int, a: int, tol: int) -> bool:
+    if a < 12:
+        return True
+    return _dist((r, g, b), WHITE) <= tol
+
+
+def _apply_fade(px, x: int, y: int, r: int, g: int, b: int, a: int) -> None:
+    d = _dist((r, g, b), WHITE)
+    if d <= TOL or a < 12:
+        px[x, y] = (r, g, b, 0)
+    elif d <= TOL + SOFT:
+        px[x, y] = (r, g, b, int(a * ((d - TOL) / SOFT)))
 
 
 def _flood_knockout(img: Image.Image) -> Image.Image:
@@ -56,14 +73,50 @@ def _flood_knockout(img: Image.Image) -> Image.Image:
             continue
         seen[i] = 1
         r, g, b, a = px[x, y]
-        d = _dist((r, g, b), WHITE)
-        if d <= TOL:
-            px[x, y] = (r, g, b, 0)
-            q.extend(((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)))
-        elif d <= TOL + SOFT:
-            px[x, y] = (r, g, b, int(a * ((d - TOL) / SOFT)))
+        if not _is_background(r, g, b, a, TOL + SOFT):
+            continue
+        _apply_fade(px, x, y, r, g, b, a)
+        for dx, dy in NEIGHBORS4:
+            q.append((x + dx, y + dy))
 
+    _punch_interior_white(px, w, h)
     return img
+
+
+def _punch_interior_white(px, w: int, h: int) -> None:
+    """Remove ilhas brancas presas entre arco, lança e corpo."""
+    seen = bytearray(w * h)
+    for y in range(h):
+        for x in range(w):
+            i = y * w + x
+            if seen[i]:
+                continue
+            r, g, b, a = px[x, y]
+            if a < 12 or _dist((r, g, b), WHITE) > TOL + SOFT:
+                continue
+            blob: list[tuple[int, int, int, int, int, int]] = []
+            q = deque([(x, y)])
+            seen[i] = 1
+            while q:
+                cx, cy = q.popleft()
+                cr, cg, cb, ca = px[cx, cy]
+                blob.append((cx, cy, cr, cg, cb, ca))
+                for dx, dy in NEIGHBORS8:
+                    nx, ny = cx + dx, cy + dy
+                    if nx < 0 or ny < 0 or nx >= w or ny >= h:
+                        continue
+                    ni = ny * w + nx
+                    if seen[ni]:
+                        continue
+                    nr, ng, nb, na = px[nx, ny]
+                    if na < 12 or _dist((nr, ng, nb), WHITE) > TOL + SOFT:
+                        continue
+                    seen[ni] = 1
+                    q.append((nx, ny))
+            if len(blob) < HOLE_MIN_AREA:
+                continue
+            for bx, by, br, bg, bb, ba in blob:
+                _apply_fade(px, bx, by, br, bg, bb, ba)
 
 
 def _autocrop(img: Image.Image, alpha_min: int = 20) -> Image.Image:
@@ -83,6 +136,16 @@ def _fit_feet(img: Image.Image, height: int = TARGET_H) -> Image.Image:
     return img.resize((nw, nh), Image.Resampling.LANCZOS)
 
 
+def _clean_existing_sprite(path: Path) -> None:
+    img = Image.open(path).convert("RGBA")
+    w, h = img.size
+    before = img.tobytes()
+    px = img.load()
+    _punch_interior_white(px, w, h)
+    if img.tobytes() != before:
+        img.save(path, "PNG")
+
+
 def prepare_player_sprites(force: bool = False) -> dict[str, Path]:
     PLAYER_DIR.mkdir(parents=True, exist_ok=True)
     out: dict[str, Path] = {}
@@ -90,8 +153,11 @@ def prepare_player_sprites(force: bool = False) -> dict[str, Path]:
         dest = PLAYER_DIR / f"{name}.png"
         out[name] = dest
         if dest.exists() and not force:
+            _clean_existing_sprite(dest)
             continue
         if not source.exists():
+            if dest.exists():
+                _clean_existing_sprite(dest)
             continue
         cut = _flood_knockout(Image.open(source))
         cut = _fit_feet(cut, 140 if name == "crouch" else TARGET_H)

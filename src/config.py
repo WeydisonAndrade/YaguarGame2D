@@ -43,6 +43,9 @@ KNOCKBACK = 22
 GROUND_Y = 478
 ONCA_SCALE = 0.78
 ONCA_WAVE_TOTAL = 3
+ONCA_WALK_SPEED = 3.4
+ONCA_RUN_SPEED = 7.6
+ONCA_RUN_DISTANCE = 150
 
 # (x, y, w, h) — chão na laje de pedra da floresta
 PLATFORMS = (

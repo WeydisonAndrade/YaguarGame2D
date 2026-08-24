@@ -1,6 +1,7 @@
 import math
 import random
 import pygame
+from src import audio
 from src.config import (
     SCREEN_WIDTH,
     SCREEN_HEIGHT,
@@ -18,6 +19,9 @@ from src.config import (
     GROUND_Y,
     PLATFORMS,
     ONCA_SCALE,
+    ONCA_WALK_SPEED,
+    ONCA_RUN_SPEED,
+    ONCA_RUN_DISTANCE,
 )
 from src.player_anim import load_player_frames
 
@@ -68,6 +72,7 @@ class YaguarPlayer(pygame.sprite.Sprite):
         self.rect = self.image.get_rect(midbottom=(x, y))
         self.max_health = 100
         self.health = 100
+        self.max_stamina = 100
         self.stamina = 100
         self.has_garra_espiritual = False
         self.facing = 1
@@ -84,6 +89,10 @@ class YaguarPlayer(pygame.sprite.Sprite):
         self.queued_attack = None
         self.strike_spawned = False
         self.pending_strike = None
+        self.flash_timer = 0
+        self.flash_color = (255, 255, 255)
+        self._heavy = False
+        self.spear_attacks = 0
 
     @property
     def hurtbox(self) -> pygame.Rect:
@@ -108,8 +117,8 @@ class YaguarPlayer(pygame.sprite.Sprite):
             if self.attack_timer <= 0:
                 self.attacking = False
 
-        if self.stamina < 100 and not (keys[pygame.K_LSHIFT] and not self.crouching):
-            self.stamina = min(100, self.stamina + 0.28)
+        if self.stamina < self.max_stamina and not (keys[pygame.K_LSHIFT] and not self.crouching):
+            self.stamina = min(self.max_stamina, self.stamina + 0.28)
 
         if self.queued_attack and not self.attacking:
             self._begin_attack(heavy=self.queued_attack == "heavy")
@@ -176,6 +185,10 @@ class YaguarPlayer(pygame.sprite.Sprite):
         self.pending_strike = None
         self.rect.x += self.facing * 10
         self._heavy = heavy
+        if not heavy:
+            self.spear_attacks += 1
+            if self.spear_attacks % 5 == 0:
+                audio.play_yaguar_roar()
 
     def _try_spawn_strike(self) -> None:
         if not self.attacking or self.strike_spawned:
@@ -196,17 +209,23 @@ class YaguarPlayer(pygame.sprite.Sprite):
         self.pending_strike = None
         return strike
 
-    def take_damage(self, amount: float, source_x: float | None = None) -> None:
+    def take_damage(self, amount: float, source_x: float | None = None) -> float:
         if self.invuln > 0:
-            return
+            return 0
         if self.blocking:
             amount *= BLOCK_DAMAGE_FACTOR
         self.health -= amount
         if source_x is not None:
             push = -KNOCKBACK if source_x >= self.hurtbox.centerx else KNOCKBACK
             self.rect.x += push
-        if not self.blocking:
+        if self.blocking:
+            self.flash_timer = 6
+            self.flash_color = (255, 230, 150)
+        else:
             self.invuln = PLAYER_INVULN_FRAMES
+            self.flash_timer = 12
+            self.flash_color = (255, 48, 36)
+        return amount
 
 
 class AttackHitbox(pygame.sprite.Sprite):
@@ -226,11 +245,14 @@ class BaseEnemy(GameObject):
     def __init__(self, x, y, image_path, health, speed, damage):
         super().__init__(x, y, image_path)
         self.health = health
+        self.max_health = health
         self.speed = speed
         self.damage = damage
         self.vel_y = 0
         self.on_ground = True
         self.stun = 0
+        self.flash_timer = 0
+        self.flash_color = (255, 255, 255)
 
     @property
     def hurtbox(self) -> pygame.Rect:
@@ -241,6 +263,8 @@ class BaseEnemy(GameObject):
     def take_hit(self, damage: int, source_x: float) -> None:
         self.health -= damage
         self.stun = HITSTUN_FRAMES
+        self.flash_timer = 10
+        self.flash_color = (255, 240, 210)
         push = KNOCKBACK + 6 if source_x < self.hurtbox.centerx else -(KNOCKBACK + 6)
         self.rect.x += push
 
@@ -256,14 +280,22 @@ class BaseEnemy(GameObject):
 
 
 class SpectralJaguar(BaseEnemy):
-    """Onça espectral — garras e mordidas."""
+    """Onça espectral — perseguição em galope, garras e mordidas."""
     def __init__(self, x, y):
-        super().__init__(x, y, "assets/enemy_onca_spectral.png", health=140, speed=3.2, damage=16)
+        super().__init__(x, y, "assets/enemy_onca_spectral.png", health=140, speed=ONCA_WALK_SPEED, damage=8)
         self.frames = {}
         for name in ("idle", "claw", "bite"):
             raw = pygame.image.load(f"assets/onca/{name}.png").convert_alpha()
             size = (max(1, int(raw.get_width() * ONCA_SCALE)), max(1, int(raw.get_height() * ONCA_SCALE)))
             self.frames[name] = pygame.transform.smoothscale(raw, size)
+        idle = self.frames["idle"]
+        bite = self.frames["bite"]
+        self.frames["run1"] = pygame.transform.smoothscale(
+            idle, (max(1, int(idle.get_width() * 1.04)), max(1, int(idle.get_height() * 0.96)))
+        )
+        self.frames["run2"] = pygame.transform.smoothscale(
+            bite, (max(1, int(bite.get_width() * 0.92)), max(1, int(bite.get_height() * 0.94)))
+        )
         self.image = self.frames["idle"]
         self.rect = self.image.get_rect(midbottom=(x, y))
         self.facing = -1
@@ -273,7 +305,10 @@ class SpectralJaguar(BaseEnemy):
         self.next_attack = "claw"
         self.pending_melee = None
         self.melee_spawned = False
-        self.pending_damage = 16
+        self.pending_damage = 8
+        self.anim_tick = 0
+        self.run_frame = 0
+        self.running = False
 
     @property
     def hurtbox(self) -> pygame.Rect:
@@ -306,7 +341,7 @@ class SpectralJaguar(BaseEnemy):
                 hx = self.hurtbox.right - 8 if self.facing > 0 else self.hurtbox.left - reach + 8
                 hy = player_pos[1] - 24
                 self.pending_melee = pygame.Rect(hx, hy, reach, 50)
-                self.pending_damage = 18 if self.action == "claw" else 24
+                self.pending_damage = 9 if self.action == "claw" else 12
                 self.melee_spawned = True
                 if self.action == "bite":
                     self.rect.x += self.facing * 18
@@ -324,9 +359,26 @@ class SpectralJaguar(BaseEnemy):
             self.next_attack = "bite" if self.next_attack == "claw" else "claw"
             self.action_timer = 26
             self.melee_spawned = False
+            if self.running:
+                self.rect.x += self.facing * 20
+            self._set_pose("claw" if self.action == "claw" else "bite")
+            self.rect, self.vel_y, self.on_ground = apply_gravity_and_platforms(self.rect, self.vel_y, self.on_ground)
+            return
 
-        self._set_pose("idle")
+        self.running = self.stun <= 0 and dist > ONCA_RUN_DISTANCE
+        approaching = self.stun <= 0 and dist > 70
+        self.speed = ONCA_RUN_SPEED if self.running else ONCA_WALK_SPEED
         self.move_towards(player_pos)
+
+        if approaching:
+            self.anim_tick += 1
+            cadence = 5 if self.running else 9
+            if self.anim_tick % cadence == 0:
+                self.run_frame = 1 - self.run_frame
+            self._set_pose("run1" if self.run_frame == 0 else "run2")
+        else:
+            self.run_frame = 0
+            self._set_pose("idle")
 
 
 class OncaNegraMiniBoss(SpectralJaguar):
@@ -350,7 +402,7 @@ class TreeTrunk(pygame.sprite.Sprite):
         self.fx = float(x)
         self.fy = float(y)
         self.rect = self.image.get_rect(center=(int(self.fx), int(self.fy)))
-        self.damage = 22
+        self.damage = 12
         self.life = 160
 
     def update(self, *args):
@@ -371,7 +423,7 @@ class TreeTrunk(pygame.sprite.Sprite):
 class MapinguariBoss(BaseEnemy):
     """Boss Final — garras e arremesso de troncos."""
     def __init__(self, x, y):
-        super().__init__(x, y, "assets/boss_mapinguari.png", health=320, speed=1.3, damage=22)
+        super().__init__(x, y, "assets/boss_mapinguari.png", health=320, speed=1.3, damage=11)
         self.frames = {
             "idle": pygame.image.load("assets/mapinguari/idle.png").convert_alpha(),
             "attack": pygame.image.load("assets/mapinguari/attack.png").convert_alpha(),
@@ -386,9 +438,11 @@ class MapinguariBoss(BaseEnemy):
         self.cooldown = 40
         self.pending_melee = None
         self.pending_log = None
+        self.pending_damage = 11
         self.melee_spawned = False
         self.log_spawned = False
         self.aim = (x, y)
+        audio.play_mapinguari_roar()
 
     @property
     def hurtbox(self) -> pygame.Rect:
@@ -396,7 +450,9 @@ class MapinguariBoss(BaseEnemy):
         return pygame.Rect(self.rect.centerx - w // 2, self.rect.bottom - h, w, h)
 
     def _set_pose(self, name: str) -> None:
-        frame = self.frames.get(name, self.frames["idle"])
+        frame = self.frames.get("attack" if name == "swipe_right" else name, self.frames["idle"])
+        if name == "swipe_right":
+            frame = pygame.transform.rotate(frame, -16 * self.facing)
         if self.facing < 0:
             frame = pygame.transform.flip(frame, True, False)
         midbottom = self.rect.midbottom
@@ -441,7 +497,18 @@ class MapinguariBoss(BaseEnemy):
                     hx = self.hurtbox.right if self.facing > 0 else self.hurtbox.left - reach
                     hy = self.aim[1] - 28
                     self.pending_melee = pygame.Rect(hx, hy, reach, 56)
+                    self.pending_damage = 11
                     self.melee_spawned = True
+            elif self.action == "swipe_right":
+                self._set_pose("swipe_right")
+                if not self.melee_spawned and 6 <= self.action_timer <= 14:
+                    reach = 96
+                    hx = self.hurtbox.right - 8 if self.facing > 0 else self.hurtbox.left - reach + 8
+                    hy = self.hurtbox.top + 18
+                    self.pending_melee = pygame.Rect(hx, hy, reach, 80)
+                    self.pending_damage = 13
+                    self.melee_spawned = True
+                    self.rect.x += self.facing * 18
             elif self.action == "throw":
                 self._set_pose("throw")
                 if not self.log_spawned and self.action_timer <= 10:
@@ -449,8 +516,13 @@ class MapinguariBoss(BaseEnemy):
                     self.pending_log = TreeTrunk(hx, hy, self.aim)
                     self.log_spawned = True
             if self.action_timer <= 0:
-                self.action = "idle"
-                self.cooldown = 36 if self.phase == 1 else 24
+                if self.action == "attack":
+                    self.action = "swipe_right"
+                    self.action_timer = 32
+                    self.melee_spawned = False
+                else:
+                    self.action = "idle"
+                    self.cooldown = 36 if self.phase == 1 else 24
             self.rect, self.vel_y, self.on_ground = apply_gravity_and_platforms(self.rect, self.vel_y, self.on_ground)
             return
 
@@ -463,11 +535,13 @@ class MapinguariBoss(BaseEnemy):
                 self.action_timer = 28
                 self.melee_spawned = False
                 self.facing = -1 if player_pos[0] < self.hurtbox.centerx else 1
+                audio.play_mapinguari_roar()
             elif dist > 170:
                 self.action = "throw"
                 self.action_timer = 42
                 self.log_spawned = False
                 self.facing = -1 if player_pos[0] < self.hurtbox.centerx else 1
+                audio.play_mapinguari_roar()
 
         if self.action == "idle":
             self._set_pose("idle")

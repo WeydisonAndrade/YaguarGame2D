@@ -18,6 +18,7 @@ from src.config import (
     COLOR_SCARLET,
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
+    TOTAL_HERBS_TO_COLLECT,
 )
 
 _TITLE_FONTS = (
@@ -394,3 +395,265 @@ class PauseOverlay:
         screen.blit(fill, rect.topleft)
         screen.blit(text, text.get_rect(center=rect.center))
         return rect
+
+
+HP_FILL = (168, 36, 38)
+HP_GHOST = (120, 72, 48)
+HP_CRIT = (220, 48, 42)
+HP_SHINE = (214, 92, 86)
+STM_FILL = (196, 158, 62)
+STM_GHOST = (92, 70, 32)
+STM_SHINE = (232, 208, 118)
+HERB_LIT = (86, 168, 72)
+HERB_DIM = (48, 52, 40)
+
+
+class RitualHUD:
+    """Barras de vida, stamina e selos do guerreiro."""
+
+    def __init__(self) -> None:
+        self.font_name = load_font(_TITLE_FONTS, 16, bold=True)
+        self.font_label = load_font(_BODY_FONTS, 12, bold=True)
+        self.font_num = load_font(_BODY_FONTS, 13, bold=True)
+        self.font_zone = load_font(_BODY_FONTS, 14, bold=True)
+        self.font_hint = load_font(_BODY_FONTS, 12)
+        self.hp_ghost = 100.0
+        self.stm_ghost = 100.0
+        self.time = 0.0
+        self.hurt_pulse = 0.0
+
+    def update(self, game, dt: float = 1 / 60) -> None:
+        self.time += dt
+        player = game.player
+        hp = float(player.health)
+        stm = float(player.stamina)
+        if hp < self.hp_ghost:
+            self.hp_ghost = max(hp, self.hp_ghost - player.max_health * dt * 0.55)
+            self.hurt_pulse = 1.0
+        else:
+            self.hp_ghost = hp
+        if stm < self.stm_ghost:
+            self.stm_ghost = max(stm, self.stm_ghost - player.max_stamina * dt * 0.7)
+        else:
+            self.stm_ghost = stm
+        self.hurt_pulse = max(0.0, self.hurt_pulse - dt * 2.4)
+
+    def draw(self, game, screen: pygame.Surface, zone: str) -> None:
+        self._draw_player_plate(game, screen)
+        self._draw_chrome(screen, zone)
+        self._draw_enemy_bars(game, screen)
+
+    def _draw_player_plate(self, game, screen: pygame.Surface) -> None:
+        player = game.player
+        plate = pygame.Rect(16, 14, 368, 118)
+        body = pygame.Surface(plate.size, pygame.SRCALPHA)
+        pygame.draw.rect(body, (*COLOR_BARK, 200), body.get_rect(), border_radius=8)
+        screen.blit(body, plate.topleft)
+        pygame.draw.rect(screen, COLOR_GOLD_SHADOW, plate, 2, border_radius=8)
+        pygame.draw.rect(screen, COLOR_GOLD_LEAF, plate.inflate(-6, -6), 1, border_radius=6)
+
+        name = self.font_name.render("YÁGUAR", True, COLOR_GOLD_BRIGHT)
+        screen.blit(name, (plate.x + 16, plate.y + 8))
+        hp_txt = self.font_num.render(
+            f"{max(0, int(player.health))}/{player.max_health}", True, COLOR_PARCHMENT
+        )
+        screen.blit(hp_txt, (plate.right - hp_txt.get_width() - 14, plate.y + 10))
+
+        crit = player.health / player.max_health <= 0.3
+        pulse = 0.5 + 0.5 * math.sin(self.time * 7.0) if crit else 0.0
+        hp_color = _mix(HP_FILL, HP_CRIT, 0.45 + 0.55 * pulse) if crit else HP_FILL
+        if self.hurt_pulse > 0:
+            hp_color = _mix(hp_color, (255, 220, 200), self.hurt_pulse * 0.55)
+
+        self._draw_bar(
+            screen,
+            plate.x + 16,
+            plate.y + 34,
+            336,
+            16,
+            player.health / player.max_health,
+            self.hp_ghost / player.max_health,
+            hp_color,
+            HP_GHOST,
+            HP_SHINE,
+            ticks=10,
+        )
+        stm_label = self.font_label.render("FÔLEGO", True, COLOR_GOLD_LEAF)
+        screen.blit(stm_label, (plate.x + 16, plate.y + 54))
+        self._draw_bar(
+            screen,
+            plate.x + 16,
+            plate.y + 70,
+            336,
+            10,
+            player.stamina / player.max_stamina,
+            self.stm_ghost / player.max_stamina,
+            STM_FILL,
+            STM_GHOST,
+            STM_SHINE,
+            ticks=5,
+        )
+
+        self._draw_herb_slots(screen, plate.x + 16, plate.y + 88, game.herbs_collected)
+        self._draw_garra_seal(screen, plate.right - 118, plate.y + 86, player.has_garra_espiritual)
+
+    def _draw_bar(
+        self,
+        screen: pygame.Surface,
+        x: int,
+        y: int,
+        w: int,
+        h: int,
+        ratio: float,
+        ghost: float,
+        fill: tuple[int, int, int],
+        ghost_color: tuple[int, int, int],
+        shine: tuple[int, int, int],
+        ticks: int,
+    ) -> None:
+        ratio = max(0.0, min(1.0, ratio))
+        ghost = max(0.0, min(1.0, ghost))
+        back = pygame.Rect(x, y, w, h)
+        pygame.draw.rect(screen, COLOR_INK, back, border_radius=3)
+        inner = back.inflate(-4, -4)
+        if ghost > 0:
+            g = pygame.Rect(inner.x, inner.y, max(0, int(inner.w * ghost)), inner.h)
+            pygame.draw.rect(screen, ghost_color, g, border_radius=2)
+        if ratio > 0:
+            f = pygame.Rect(inner.x, inner.y, max(0, int(inner.w * ratio)), inner.h)
+            pygame.draw.rect(screen, fill, f, border_radius=2)
+            if f.h >= 6 and f.w > 6:
+                pygame.draw.rect(screen, shine, pygame.Rect(f.x, f.y, f.w, max(2, f.h // 3)), border_radius=2)
+        for i in range(1, ticks):
+            tx = inner.x + int(inner.w * i / ticks)
+            pygame.draw.line(screen, (12, 8, 6), (tx, inner.y), (tx, inner.bottom), 1)
+        pygame.draw.rect(screen, COLOR_GOLD_SHADOW, back, 1, border_radius=3)
+
+    def _draw_herb_slots(self, screen: pygame.Surface, x: int, y: int, collected: int) -> None:
+        label = self.font_label.render("ERVAS", True, COLOR_GOLD_LEAF)
+        screen.blit(label, (x, y + 2))
+        for i in range(TOTAL_HERBS_TO_COLLECT):
+            cx = x + 58 + i * 22
+            cy = y + 10
+            filled = i < collected
+            color = HERB_LIT if filled else HERB_DIM
+            pygame.draw.circle(screen, COLOR_INK, (cx, cy), 8)
+            pygame.draw.circle(screen, color, (cx, cy), 6)
+            pygame.draw.circle(screen, COLOR_GOLD_LEAF if filled else COLOR_GOLD_SHADOW, (cx, cy), 8, 1)
+
+    def _draw_garra_seal(self, screen: pygame.Surface, x: int, y: int, unlocked: bool) -> None:
+        pulse = 0.5 + 0.5 * math.sin(self.time * 2.6) if unlocked else 0.0
+        color = _mix(COLOR_GOLD_LEAF, COLOR_GOLD_BRIGHT, pulse) if unlocked else (90, 86, 78)
+        text = "GARRA LIVRE" if unlocked else "GARRA SELADA"
+        label = self.font_label.render(text, True, color)
+        screen.blit(label, (x, y + 2))
+        if unlocked:
+            pygame.draw.circle(screen, color, (x - 10, y + 10), 4)
+
+    def _draw_chrome(self, screen: pygame.Surface, zone: str) -> None:
+        banner = self.font_zone.render(zone, True, COLOR_GOLD_LEAF)
+        screen.blit(banner, (32, 136))
+        hint = self.font_hint.render("ESC  pausar", True, COLOR_PARCHMENT)
+        screen.blit(hint, (SCREEN_WIDTH - hint.get_width() - 18, 18))
+
+    def _draw_enemy_bars(self, game, screen: pygame.Surface) -> None:
+        ox, oy = game.fx.ox, game.fx.oy
+        for enemy in game.enemies:
+            max_hp = max(1, getattr(enemy, "max_health", enemy.health))
+            ratio = max(0.0, min(1.0, enemy.health / max_hp))
+            cls = enemy.__class__.__name__
+            if cls == "MapinguariBoss":
+                width = 168
+            elif cls == "SpectralJaguar":
+                width = 128
+            else:
+                width = 110
+            cx = enemy.hurtbox.centerx + ox
+            top = enemy.rect.top + oy - 14
+            self._draw_bar(
+                screen,
+                cx - width // 2,
+                top,
+                width,
+                8,
+                ratio,
+                ratio,
+                HP_FILL if ratio > 0.3 else HP_CRIT,
+                HP_GHOST,
+                HP_SHINE,
+                ticks=4,
+            )
+
+
+class SynopsisPlate:
+    """Tela de sinopse estática — floresta, letterbox e texto ritual."""
+
+    def __init__(
+        self,
+        kicker: str,
+        title: str,
+        lines: tuple[str, ...],
+        hint: str,
+        scene: int = 0,
+        veil: bool = False,
+        accent: tuple[int, int, int] = COLOR_GOLD_BRIGHT,
+    ) -> None:
+        self.kicker = kicker
+        self.title = title
+        self.lines = lines
+        self.hint = hint
+        self.scene = scene
+        self.veil = veil
+        self.accent = accent
+        self.font_kicker = load_font(_BODY_FONTS, 14, bold=True)
+        self.font_title = load_font(_TITLE_FONTS, 32, bold=True)
+        self.font_body = load_font(_TITLE_FONTS, 18)
+        self.font_hint = load_font(_BODY_FONTS, 14)
+
+    def draw(self, game, screen: pygame.Surface) -> None:
+        game.parallax.use_scene(self.scene)
+        game.parallax.draw_back(screen, (SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2))
+        if self.veil:
+            game.parallax.draw_corrupt_veil(screen)
+
+        wash = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        wash.fill((6, 10, 8, 150))
+        screen.blit(wash, (0, 0))
+
+        pygame.draw.rect(screen, COLOR_INK, (0, 0, SCREEN_WIDTH, 52))
+        pygame.draw.rect(screen, COLOR_INK, (0, SCREEN_HEIGHT - 52, SCREEN_WIDTH, 52))
+        pygame.draw.line(screen, COLOR_GOLD_SHADOW, (48, 52), (SCREEN_WIDTH - 48, 52), 1)
+        pygame.draw.line(screen, COLOR_GOLD_SHADOW, (48, SCREEN_HEIGHT - 52), (SCREEN_WIDTH - 48, SCREEN_HEIGHT - 52), 1)
+
+        kicker = self.font_kicker.render(self.kicker, True, COLOR_GOLD_LEAF)
+        blit_centered(screen, kicker, (SCREEN_WIDTH // 2, 26))
+
+        panel = pygame.Rect(88, 78, SCREEN_WIDTH - 176, SCREEN_HEIGHT - 156)
+        body = pygame.Surface(panel.size, pygame.SRCALPHA)
+        pygame.draw.rect(body, (*COLOR_BARK, 214), body.get_rect(), border_radius=10)
+        screen.blit(body, panel.topleft)
+        pygame.draw.rect(screen, COLOR_GOLD_SHADOW, panel, 3, border_radius=10)
+        pygame.draw.rect(screen, COLOR_GOLD_LEAF, panel.inflate(-10, -10), 1, border_radius=8)
+
+        title = self.font_title.render(self.title, True, self.accent)
+        blit_centered(screen, title, (panel.centerx, panel.y + 42))
+        pygame.draw.line(screen, COLOR_GOLD_SHADOW, (panel.centerx - 120, panel.y + 68), (panel.centerx - 16, panel.y + 68), 2)
+        pygame.draw.line(screen, COLOR_GOLD_LEAF, (panel.centerx + 16, panel.y + 68), (panel.centerx + 120, panel.y + 68), 2)
+        pygame.draw.polygon(
+            screen,
+            COLOR_GOLD_LEAF,
+            ((panel.centerx, panel.y + 62), (panel.centerx + 8, panel.y + 68), (panel.centerx, panel.y + 74), (panel.centerx - 8, panel.y + 68)),
+        )
+
+        y = panel.y + 100
+        for line in self.lines:
+            if not line:
+                y += 18
+                continue
+            color = self.accent if line.startswith("«") or line.startswith("RECOMPENSAS") or line.startswith("—") else COLOR_PARCHMENT
+            surf = self.font_body.render(line, True, color)
+            blit_centered(screen, surf, (panel.centerx, y))
+            y += 32
+
+        hint = self.font_hint.render(self.hint, True, COLOR_GOLD_LEAF)
+        blit_centered(screen, hint, (SCREEN_WIDTH // 2, SCREEN_HEIGHT - 26))

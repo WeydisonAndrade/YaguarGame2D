@@ -1,20 +1,24 @@
 import random
 
 import pygame
+from src import audio
 from src.config import SCREEN_WIDTH, SCREEN_HEIGHT, FPS, TOTAL_HERBS_TO_COLLECT, GROUND_Y
 from src.entities import YaguarPlayer, SpectralJaguar, MapinguariBoss, HerbItem
+from src.fx import CombatFX
 from src.game_states import MenuState
 from src.parallax import ParallaxBackground
 
 
 class Game:
     def __init__(self):
+        audio.init()
         pygame.init()
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
         pygame.display.set_caption("YÁGUAR — Fase 1: O Chamado da Floresta")
         self.clock = pygame.time.Clock()
         self.running = True
         self.parallax = ParallaxBackground()
+        self.fx = CombatFX()
 
         self.state = MenuState()
         self.reset_level()
@@ -29,10 +33,12 @@ class Game:
         self.attack_hitboxes = pygame.sprite.Group()
         self.projectiles = pygame.sprite.Group()
         self.herbs = pygame.sprite.Group()
+        self.fx.clear()
 
         # Instanciar Jogador no chão da aldeia
         self.player = YaguarPlayer(150, GROUND_Y)
         self.all_sprites.add(self.player)
+        self.parallax.use_scene(0)
 
         self.spawn_spectral_jaguar()
 
@@ -47,9 +53,11 @@ class Game:
         self.all_sprites.add(jaguar)
 
     def spawn_mapinguari(self):
+        self.parallax.use_scene(1)
         boss = MapinguariBoss(SCREEN_WIDTH - 220, GROUND_Y)
         self.enemies.add(boss)
         self.all_sprites.add(boss)
+        audio.play_mapinguari()
 
     def change_state(self, new_state):
         self.state = new_state
@@ -63,7 +71,10 @@ class Game:
                     self.running = False
                 self.state.handle_events(self, event)
 
-            self.state.update(self)
+            if getattr(self, "fx", None) and self.fx.hitstop > 0:
+                self.fx.hitstop -= 1
+            else:
+                self.state.update(self)
             self.state.draw(self, self.screen)
 
             pygame.display.flip()
