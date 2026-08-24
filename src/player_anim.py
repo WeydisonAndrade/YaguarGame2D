@@ -34,10 +34,12 @@ NEIGHBORS8 = NEIGHBORS4 + ((1, 1), (1, -1), (-1, 1), (-1, -1))
 
 
 def _dist(c0: tuple[int, int, int], c1: tuple[int, int, int]) -> float:
+    """Distância euclidiana no espaço RGB."""
     return ((c0[0] - c1[0]) ** 2 + (c0[1] - c1[1]) ** 2 + (c0[2] - c1[2]) ** 2) ** 0.5
 
 
 def _is_background(r: int, g: int, b: int, a: int, tol: int) -> bool:
+    """True se o pixel for transparente ou branco o bastante para ser fundo."""
     if a < 12:
         return True
     return _dist((r, g, b), WHITE) <= tol
@@ -52,6 +54,7 @@ def _apply_fade(px, x: int, y: int, r: int, g: int, b: int, a: int) -> None:
 
 
 def _flood_knockout(img: Image.Image) -> Image.Image:
+    """Remove o fundo branco a partir das bordas (flood fill) e depois as ilhas internas."""
     img = img.convert("RGBA")
     w, h = img.size
     px = img.load()
@@ -120,6 +123,7 @@ def _punch_interior_white(px, w: int, h: int) -> None:
 
 
 def _autocrop(img: Image.Image, alpha_min: int = 20) -> Image.Image:
+    """Corta a folga transparente em volta do personagem."""
     bbox = img.getbbox()
     if not bbox:
         return img
@@ -127,6 +131,7 @@ def _autocrop(img: Image.Image, alpha_min: int = 20) -> Image.Image:
 
 
 def _fit_feet(img: Image.Image, height: int = TARGET_H) -> Image.Image:
+    """Redimensiona pela altura para os pés alinharem no GROUND_Y."""
     img = _autocrop(img)
     w, h = img.size
     if h == 0:
@@ -147,6 +152,7 @@ def _clean_existing_sprite(path: Path) -> None:
 
 
 def prepare_player_sprites(force: bool = False) -> dict[str, Path]:
+    """Gera PNGs em assets/player/ a partir das fontes, sem sobrescrever se já existirem."""
     PLAYER_DIR.mkdir(parents=True, exist_ok=True)
     out: dict[str, Path] = {}
     for name, source in POSE_SOURCES.items():
@@ -166,6 +172,7 @@ def prepare_player_sprites(force: bool = False) -> dict[str, Path]:
 
 
 def load_player_frames() -> dict[str, pygame.Surface]:
+    """Garante os PNGs e devolve as Surfaces prontas para o YaguarPlayer."""
     prepare_player_sprites()
     frames: dict[str, pygame.Surface] = {}
     for name in POSE_SOURCES:

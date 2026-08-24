@@ -43,6 +43,7 @@ _BODY_FONTS = (
 
 
 def load_font(families: tuple[str, ...], size: int, bold: bool = False) -> pygame.font.Font:
+    """Escolhe a primeira fonte serifada instalada; cai no SysFont se nenhuma existir."""
     for name in families:
         path = pygame.font.match_font(name, bold=bold)
         if path:
@@ -77,6 +78,7 @@ def blit_spaced(
     center: tuple[int, int],
     tracking: int = 14,
 ) -> pygame.Rect:
+    """Desenha o título com espaçamento extra entre letras (tracking)."""
     glyphs = [font.render(ch, True, color) for ch in text]
     width = sum(g.get_width() for g in glyphs) + tracking * max(0, len(glyphs) - 1)
     height = max((g.get_height() for g in glyphs), default=0)
@@ -89,6 +91,7 @@ def blit_spaced(
 
 
 def _make_vignette() -> pygame.Surface:
+    """Escurece bordas e rodapé para o menu parecer uma pintura emoldurada."""
     surf = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
     cx, cy = SCREEN_WIDTH / 2, SCREEN_HEIGHT * 0.42
     max_r = math.hypot(SCREEN_WIDTH, SCREEN_HEIGHT) * 0.62
@@ -117,6 +120,7 @@ def _make_wash() -> pygame.Surface:
 
 
 class RitualMenu:
+    """Menu inicial: lua escarlate, título YÁGUAR, painel de ritos e CTA."""
     def __init__(self) -> None:
         self.font_kicker = load_font(_BODY_FONTS, 15, bold=True)
         self.font_title = load_font(_TITLE_FONTS, 62, bold=True)
@@ -166,6 +170,7 @@ class RitualMenu:
                 ember["x"] = random.uniform(40, SCREEN_WIDTH - 40)
 
     def draw_backdrop(self, screen: pygame.Surface, game, focus: tuple[float, float]) -> None:
+        """Floresta + lavagem escura + lua + cinzas, por baixo do texto do menu."""
         game.parallax.draw_back(screen, focus)
         screen.blit(self.wash, (0, 0))
         self._draw_scarlet_moon(screen)
@@ -173,6 +178,7 @@ class RitualMenu:
         screen.blit(self.vignette, (0, 0))
 
     def draw(self, screen: pygame.Surface) -> None:
+        """Camada de UI: cabeçalho, ritos e botão de começar."""
         pulse = 0.5 + 0.5 * math.sin(self.time * 2.2)
         self._draw_header(screen, pulse)
         self._draw_rites_panel(screen)
@@ -331,6 +337,7 @@ class RitualMenu:
 
 
 class PauseOverlay:
+    """Painel sobre a partida pausada: continuar ou voltar ao menu."""
     def __init__(self) -> None:
         self.font_title = load_font(_TITLE_FONTS, 42, bold=True)
         self.font_sub = load_font(_TITLE_FONTS, 18)
@@ -344,6 +351,7 @@ class PauseOverlay:
         self.time += dt
 
     def hit(self, pos: tuple[int, int]) -> str | None:
+        """Retorna 'resume' ou 'menu' se o clique acertou um botão."""
         if self.resume_rect.collidepoint(pos):
             return "resume"
         if self.menu_rect.collidepoint(pos):
@@ -351,6 +359,7 @@ class PauseOverlay:
         return None
 
     def draw(self, screen: pygame.Surface) -> None:
+        """Véu escuro + painel de casca com as duas opções."""
         pulse = 0.5 + 0.5 * math.sin(self.time * 2.0)
         veil = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
         veil.fill((6, 10, 8, 168))
@@ -423,6 +432,7 @@ class RitualHUD:
         self.hurt_pulse = 0.0
 
     def update(self, game, dt: float = 1 / 60) -> None:
+        """A barra fantasma atrasa a queda de HP/stamina para o dano ser visível."""
         self.time += dt
         player = game.player
         hp = float(player.health)
@@ -439,6 +449,7 @@ class RitualHUD:
         self.hurt_pulse = max(0.0, self.hurt_pulse - dt * 2.4)
 
     def draw(self, game, screen: pygame.Surface, zone: str) -> None:
+        """Placa do jogador, nome da zona e barras de vida dos inimigos."""
         self._draw_player_plate(game, screen)
         self._draw_chrome(screen, zone)
         self._draw_enemy_bars(game, screen)
@@ -511,6 +522,7 @@ class RitualHUD:
         shine: tuple[int, int, int],
         ticks: int,
     ) -> None:
+        """Barra com fundo, rastro (ghost) e preenchimento atual."""
         ratio = max(0.0, min(1.0, ratio))
         ghost = max(0.0, min(1.0, ghost))
         back = pygame.Rect(x, y, w, h)
@@ -557,6 +569,7 @@ class RitualHUD:
         screen.blit(hint, (SCREEN_WIDTH - hint.get_width() - 18, 18))
 
     def _draw_enemy_bars(self, game, screen: pygame.Surface) -> None:
+        """Barras sem nome, ancoradas acima da hurtbox de cada inimigo."""
         ox, oy = game.fx.ox, game.fx.oy
         for enemy in game.enemies:
             max_hp = max(1, getattr(enemy, "max_health", enemy.health))
@@ -611,6 +624,7 @@ class SynopsisPlate:
         self.font_hint = load_font(_BODY_FONTS, 14)
 
     def draw(self, game, screen: pygame.Surface) -> None:
+        """Floresta estática, letterbox e painel de casca com o texto da missão."""
         game.parallax.use_scene(self.scene)
         game.parallax.draw_back(screen, (SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2))
         if self.veil:

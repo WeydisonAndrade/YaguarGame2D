@@ -1,3 +1,8 @@
+"""Entidades da Fase 1: Yáguar, onça espectral, Mapinguari, tronco e erva.
+
+A física de chão é compartilhada (gravidade + laje). O combate usa hurtboxes
+menores que o sprite, para o corpo não coincidir com folhas e penas.
+"""
 import math
 import random
 import pygame
@@ -27,14 +32,17 @@ from src.player_anim import load_player_frames
 
 
 def platform_rects() -> list[pygame.Rect]:
+    """Converte a tupla PLATFORMS em retângulos de colisão."""
     return [pygame.Rect(*box) for box in PLATFORMS]
 
 
 def apply_gravity_and_platforms(rect: pygame.Rect, vel_y: float, on_ground: bool) -> tuple[pygame.Rect, float, bool]:
+    """Aplica gravidade, pousa na laje e impede sair da tela."""
     vel_y += GRAVITY
     rect.y += int(vel_y)
     grounded = False
 
+    # Só testa o chão na descida, pelos pés, para não grudar o corpo na plataforma.
     if vel_y >= 0:
         feet = pygame.Rect(rect.x + 12, rect.bottom - 8, max(8, rect.width - 24), 10)
         for plat in platform_rects():
@@ -54,7 +62,8 @@ def apply_gravity_and_platforms(rect: pygame.Rect, vel_y: float, on_ground: bool
 
 
 class GameObject(pygame.sprite.Sprite):
-    """Classe Base com Polimorfismo para Renderização e Lógica"""
+    """Sprite simples com imagem e âncora no midbottom (pés no chão)."""
+
     def __init__(self, x, y, image_path):
         super().__init__()
         self.image = pygame.image.load(image_path).convert_alpha()
@@ -65,6 +74,8 @@ class GameObject(pygame.sprite.Sprite):
 
 
 class YaguarPlayer(pygame.sprite.Sprite):
+    """Protagonista: andar, correr, pular, agachar, bloquear e atacar com a lança."""
+
     def __init__(self, x, y):
         super().__init__()
         self.frames = load_player_frames()
@@ -74,7 +85,7 @@ class YaguarPlayer(pygame.sprite.Sprite):
         self.health = 100
         self.max_stamina = 100
         self.stamina = 100
-        self.has_garra_espiritual = False
+        self.has_garra_espiritual = False  # Liberada após a terceira onça
         self.facing = 1
         self.vel_y = 0
         self.on_ground = True
@@ -92,14 +103,18 @@ class YaguarPlayer(pygame.sprite.Sprite):
         self.flash_timer = 0
         self.flash_color = (255, 255, 255)
         self._heavy = False
-        self.spear_attacks = 0
+        self.spear_attacks = 0  # Conta golpes de lança para o rugido a cada 5
+        self.spear_magic = 0    # Frames de encantamento da lança após o rugido
+        self._roar_fx = False
 
     @property
     def hurtbox(self) -> pygame.Rect:
+        """Caixa de dano do tronco, menor que o sprite (arco e penas ficam de fora)."""
         w, h = 54, 110
         return pygame.Rect(self.rect.centerx - w // 2, self.rect.bottom - h, w, h)
 
     def _set_pose(self, name: str) -> None:
+        """Troca o frame e espelha se estiver virado para a esquerda, mantendo os pés."""
         frame = self.frames.get(name, self.frames["idle"])
         if self.facing < 0:
             frame = pygame.transform.flip(frame, True, False)
@@ -108,6 +123,7 @@ class YaguarPlayer(pygame.sprite.Sprite):
         self.rect = self.image.get_rect(midbottom=midbottom)
 
     def update(self, keys, mouse_pressed):
+        # Timers de cooldown, invulnerabilidade e duração do golpe
         if self.attack_cooldown > 0:
             self.attack_cooldown -= 1
         if self.invuln > 0:
@@ -117,6 +133,7 @@ class YaguarPlayer(pygame.sprite.Sprite):
             if self.attack_timer <= 0:
                 self.attacking = False
 
+        # Recupera fôlego quando não está sprintando
         if self.stamina < self.max_stamina and not (keys[pygame.K_LSHIFT] and not self.crouching):
             self.stamina = min(self.max_stamina, self.stamina + 0.28)
 
@@ -127,6 +144,7 @@ class YaguarPlayer(pygame.sprite.Sprite):
         self.blocking = bool(keys[pygame.K_k] or keys[pygame.K_LCTRL]) and not self.attacking
         self.crouching = bool(keys[pygame.K_s] or keys[pygame.K_DOWN]) and self.on_ground and not self.attacking
 
+        # Movimento horizontal: A/D ou setas; Shift corre e gasta stamina
         dx = 0
         if not self.crouching and not self.blocking:
             if keys[pygame.K_a] or keys[pygame.K_LEFT]:
@@ -154,6 +172,7 @@ class YaguarPlayer(pygame.sprite.Sprite):
         self.rect, self.vel_y, self.on_ground = apply_gravity_and_platforms(self.rect, self.vel_y, self.on_ground)
         self._try_spawn_strike()
 
+        # Pose visual segundo a ação atual
         self.anim_tick += 1
         if self.attacking:
             self._set_pose("attack")
@@ -171,13 +190,34 @@ class YaguarPlayer(pygame.sprite.Sprite):
             self._set_pose("idle")
 
     def queue_attack(self, heavy=False) -> None:
+        """Enfileira lança (leve) ou Garra Espiritual (pesado, se desbloqueada)."""
         if self.attack_cooldown > 0 or self.blocking:
             return
         if heavy and not self.has_garra_espiritual:
             return
         self.queued_attack = "heavy" if heavy else "light"
 
+    def roar(self) -> None:
+        """Rugido do guerreiro: encanta a lança com brilho espiritual."""
+        audio.play_yaguar_roar()
+        self.spear_magic = 56
+        self.flash_timer = max(self.flash_timer, 14)
+        self.flash_color = (255, 228, 140)
+        self._roar_fx = True
+
+    def spear_axis(self) -> tuple[tuple[float, float], tuple[float, float]]:
+        """Ponta da lança (mão → ponta), alinhada ao sprite e à direção."""
+        body = self.hurtbox
+        if self.attacking:
+            hand = (body.centerx + self.facing * 14, body.centery - 4)
+            tip = (body.centerx + self.facing * 78, body.centery - 22)
+        else:
+            hand = (body.centerx + self.facing * 8, body.centery + 10)
+            tip = (body.centerx + self.facing * 22, body.top + 6)
+        return hand, tip
+
     def _begin_attack(self, heavy=False) -> None:
+        """Inicia o golpe: avanço curto, hitbox ainda não existe (espera a janela ativa)."""
         self.attacking = True
         self.attack_timer = PLAYER_ATTACK_FRAMES
         self.attack_cooldown = 20 if heavy else 14
@@ -188,9 +228,10 @@ class YaguarPlayer(pygame.sprite.Sprite):
         if not heavy:
             self.spear_attacks += 1
             if self.spear_attacks % 5 == 0:
-                audio.play_yaguar_roar()
+                self.roar()
 
     def _try_spawn_strike(self) -> None:
+        """Cria a hitbox da lança só nos frames ativos do golpe."""
         if not self.attacking or self.strike_spawned:
             return
         if ATTACK_ACTIVE_END <= self.attack_timer <= ATTACK_ACTIVE_START:
@@ -205,11 +246,13 @@ class YaguarPlayer(pygame.sprite.Sprite):
             self.invuln = max(self.invuln, 10)
 
     def pop_strike(self) -> "AttackHitbox | None":
+        """Entrega a hitbox pendente à PlayingState (no máximo uma por golpe)."""
         strike = self.pending_strike
         self.pending_strike = None
         return strike
 
     def take_damage(self, amount: float, source_x: float | None = None) -> float:
+        """Aplica dano, knockback e flash. Bloqueio reduz o valor; i-frames ignoram o hit."""
         if self.invuln > 0:
             return 0
         if self.blocking:
@@ -229,6 +272,8 @@ class YaguarPlayer(pygame.sprite.Sprite):
 
 
 class AttackHitbox(pygame.sprite.Sprite):
+    """Retângulo invisível do golpe do jogador; some após poucos frames."""
+
     def __init__(self, x, y, width, height, damage):
         super().__init__()
         self.rect = pygame.Rect(x, y, width, height)
@@ -242,6 +287,8 @@ class AttackHitbox(pygame.sprite.Sprite):
 
 
 class BaseEnemy(GameObject):
+    """Inimigo com vida, stun, knockback e perseguição horizontal."""
+
     def __init__(self, x, y, image_path, health, speed, damage):
         super().__init__(x, y, image_path)
         self.health = health
@@ -269,6 +316,7 @@ class BaseEnemy(GameObject):
         self.rect.x += push
 
     def move_towards(self, target_pos):
+        """Anda no eixo X em direção ao alvo, respeitando stun e gravidade."""
         self.rect, self.vel_y, self.on_ground = apply_gravity_and_platforms(self.rect, self.vel_y, self.on_ground)
         if self.stun > 0:
             self.stun -= 1
@@ -281,6 +329,7 @@ class BaseEnemy(GameObject):
 
 class SpectralJaguar(BaseEnemy):
     """Onça espectral — perseguição em galope, garras e mordidas."""
+
     def __init__(self, x, y):
         super().__init__(x, y, "assets/enemy_onca_spectral.png", health=140, speed=ONCA_WALK_SPEED, damage=8)
         self.frames = {}
@@ -288,6 +337,7 @@ class SpectralJaguar(BaseEnemy):
             raw = pygame.image.load(f"assets/onca/{name}.png").convert_alpha()
             size = (max(1, int(raw.get_width() * ONCA_SCALE)), max(1, int(raw.get_height() * ONCA_SCALE)))
             self.frames[name] = pygame.transform.smoothscale(raw, size)
+        # Dois frames de corrida derivados do idle e da mordida
         idle = self.frames["idle"]
         bite = self.frames["bite"]
         self.frames["run1"] = pygame.transform.smoothscale(
@@ -324,6 +374,7 @@ class SpectralJaguar(BaseEnemy):
         self.rect = self.image.get_rect(midbottom=midbottom)
 
     def pop_melee(self) -> pygame.Rect | None:
+        """Entrega a hitbox do golpe para a PlayingState aplicar no jogador."""
         box = self.pending_melee
         self.pending_melee = None
         return box
@@ -332,6 +383,7 @@ class SpectralJaguar(BaseEnemy):
         self.facing = -1 if player_pos[0] < self.hurtbox.centerx else 1
         dist = abs(player_pos[0] - self.hurtbox.centerx)
 
+        # Durante um golpe: pose, hitbox na janela ativa e avanço na mordida
         if self.action_timer > 0:
             self.action_timer -= 1
             pose = "claw" if self.action == "claw" else "bite"
@@ -354,6 +406,7 @@ class SpectralJaguar(BaseEnemy):
         if self.cooldown > 0:
             self.cooldown -= 1
 
+        # Perto o bastante: alterna garra e mordida
         if self.stun <= 0 and self.cooldown <= 0 and dist < 130:
             self.action = self.next_attack
             self.next_attack = "bite" if self.next_attack == "claw" else "claw"
@@ -365,6 +418,7 @@ class SpectralJaguar(BaseEnemy):
             self.rect, self.vel_y, self.on_ground = apply_gravity_and_platforms(self.rect, self.vel_y, self.on_ground)
             return
 
+        # Longe: galope; médio: caminhada
         self.running = self.stun <= 0 and dist > ONCA_RUN_DISTANCE
         approaching = self.stun <= 0 and dist > 70
         self.speed = ONCA_RUN_SPEED if self.running else ONCA_WALK_SPEED
@@ -388,6 +442,7 @@ class OncaNegraMiniBoss(SpectralJaguar):
 
 class TreeTrunk(pygame.sprite.Sprite):
     """Tronco arremessado pelo Mapinguari em direção ao alvo."""
+
     def __init__(self, x, y, target: tuple[float, float]):
         super().__init__()
         raw = pygame.image.load("assets/tree_trunk.png").convert_alpha()
@@ -421,7 +476,8 @@ class TreeTrunk(pygame.sprite.Sprite):
 
 
 class MapinguariBoss(BaseEnemy):
-    """Boss Final — garras e arremesso de troncos."""
+    """Chefe final: combo de dois braços de perto e arremesso de tronco de longe."""
+
     def __init__(self, x, y):
         super().__init__(x, y, "assets/boss_mapinguari.png", health=320, speed=1.3, damage=11)
         self.frames = {
@@ -450,6 +506,7 @@ class MapinguariBoss(BaseEnemy):
         return pygame.Rect(self.rect.centerx - w // 2, self.rect.bottom - h, w, h)
 
     def _set_pose(self, name: str) -> None:
+        # O gancho direito reusa o frame de ataque, rotacionado para parecer o outro braço.
         frame = self.frames.get("attack" if name == "swipe_right" else name, self.frames["idle"])
         if name == "swipe_right":
             frame = pygame.transform.rotate(frame, -16 * self.facing)
@@ -476,6 +533,7 @@ class MapinguariBoss(BaseEnemy):
         return hx, hy
 
     def update(self, player_pos):
+        # Fases: abaixo de 200 HP acelera; abaixo de 100 fica mais agressivo.
         if self.health < 100:
             self.phase = 3
             self.speed = 2.2
@@ -491,6 +549,7 @@ class MapinguariBoss(BaseEnemy):
         if self.action_timer > 0:
             self.action_timer -= 1
             if self.action == "attack":
+                # Primeiro golpe do combo: garra esquerda na altura do peito
                 self._set_pose("attack")
                 if not self.melee_spawned and 8 <= self.action_timer <= 16:
                     reach = 110
@@ -500,6 +559,7 @@ class MapinguariBoss(BaseEnemy):
                     self.pending_damage = 11
                     self.melee_spawned = True
             elif self.action == "swipe_right":
+                # Segundo golpe: gancho da mão direita, mais alto, com avanço
                 self._set_pose("swipe_right")
                 if not self.melee_spawned and 6 <= self.action_timer <= 14:
                     reach = 96
@@ -516,6 +576,7 @@ class MapinguariBoss(BaseEnemy):
                     self.pending_log = TreeTrunk(hx, hy, self.aim)
                     self.log_spawned = True
             if self.action_timer <= 0:
+                # Encadeia esquerda → direita; depois volta ao idle com cooldown
                 if self.action == "attack":
                     self.action = "swipe_right"
                     self.action_timer = 32
@@ -549,5 +610,7 @@ class MapinguariBoss(BaseEnemy):
 
 
 class HerbItem(GameObject):
+    """Erva medicinal no chão; coleta cura o jogador."""
+
     def __init__(self, x, y):
         super().__init__(x, y, "assets/herb.png")

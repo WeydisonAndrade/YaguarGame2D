@@ -33,6 +33,7 @@ LEAF_COLORS = (
 
 
 def _cover_scale(raw: pygame.Surface, tw: int, th: int) -> pygame.Surface:
+    """Escala a pintura para cobrir a tela sem distorcer (modo cover)."""
     rw, rh = raw.get_width(), raw.get_height()
     scale = max(tw / rw, th / rh)
     size = (max(tw, int(round(rw * scale))), max(th, int(round(rh * scale))))
@@ -60,6 +61,7 @@ def _make_mist(width: int, height: int, alpha: int) -> pygame.Surface:
 
 
 class ParallaxBackground:
+    """Uma pintura de floresta por vez, com vento, névoa, raios e folhas caindo."""
     def __init__(self) -> None:
         target = (
             int(SCREEN_WIDTH * COVER_PAD_X),
@@ -115,9 +117,11 @@ class ParallaxBackground:
         }
 
     def use_scene(self, index: int) -> None:
+        """0 = floresta das onças / menu; 1 = caminho do Mapinguari."""
         self.index = max(0, min(index, len(self.scenes) - 1))
 
     def update(self, dt: float = 1 / 60) -> None:
+        """Move folhas e poeira com o vento; recicla o que sai da tela."""
         self.time += dt
         wind = math.sin(self.time * 0.55)
         for leaf in self.leaves:
@@ -139,6 +143,7 @@ class ParallaxBackground:
         return self.scenes[self.index]
 
     def _offset(self, surf: pygame.Surface, factor: float, focus: tuple[float, float]) -> tuple[int, int]:
+        """Desloca a pintura segundo o foco do jogador e um pano de vento lento."""
         nx = max(-0.5, min(0.5, (focus[0] / SCREEN_WIDTH) - 0.5))
         ny = max(-0.5, min(0.5, (focus[1] / SCREEN_HEIGHT) - 0.5))
         slack_x = surf.get_width() - SCREEN_WIDTH
@@ -158,6 +163,7 @@ class ParallaxBackground:
         return x, y
 
     def draw_back(self, screen: pygame.Surface, focus: tuple[float, float]) -> None:
+        """Camada de fundo completa: pintura + raios + névoa + poeira + folhas."""
         surf = self._current()
         screen.blit(surf, self._offset(surf, PARALLAX_FACTOR, focus))
         self._draw_godrays(screen)
@@ -214,6 +220,7 @@ class ParallaxBackground:
         return
 
     def draw_corrupt_veil(self, screen: pygame.Surface) -> None:
+        """Multiplica um véu púrpura após a primeira onça (floresta corrompida)."""
         screen.blit(self._veil, (0, 0), special_flags=pygame.BLEND_MULT)
 
     def draw_world(self, screen: pygame.Surface, focus: tuple[float, float], corrupt: bool = False) -> None:

@@ -1,14 +1,21 @@
+"""Máquina de estados da sessão: menu, intro, partida, pausa, vitória e derrota.
+
+Cada estado implementa handle_events, update e draw. A PlayingState concentra
+o combate: golpes do jogador, ataques dos inimigos, coleta e transições de onda.
+"""
 import math
 import pygame
 import random
 from src import audio
-from src.config import (SCREEN_WIDTH, SCREEN_HEIGHT, COLOR_TEXT, COLOR_GOLD, 
+from src.config import (SCREEN_WIDTH, SCREEN_HEIGHT, COLOR_TEXT, COLOR_GOLD,
                         COLOR_RED, COLOR_SCARLET, TOTAL_HERBS_TO_COLLECT, GROUND_Y, ONCA_WAVE_TOTAL)
 from src.entities import YaguarPlayer, SpectralJaguar, MapinguariBoss, HerbItem
 from src.fx import blit_flashed
 from src.ui import PauseOverlay, RitualHUD, RitualMenu, SynopsisPlate
 
+
 def _separate(player, enemy) -> None:
+    """Empurra jogador e inimigo para lados opostos quando os corpos se sobrepõem."""
     if player.hurtbox.centerx <= enemy.hurtbox.centerx:
         player.rect.x -= 10
         enemy.rect.x += 14
@@ -18,11 +25,16 @@ def _separate(player, enemy) -> None:
 
 
 class GameState:
+    """Interface mínima de uma tela. Subclasses preenchem só o que precisam."""
+
     def handle_events(self, game, event): pass
     def update(self, game): pass
     def draw(self, game, screen): pass
 
+
 class MenuState(GameState):
+    """Tela inicial ritual: floresta viva, ritos e chamada para a sinopse."""
+
     def __init__(self):
         self.ui = RitualMenu()
         audio.play_menu()
@@ -44,6 +56,7 @@ class MenuState(GameState):
 
     def draw(self, game, screen):
         t = pygame.time.get_ticks() / 1000.0
+        # O foco caminha devagar para o fundo da floresta parecer vivo.
         focus = (
             SCREEN_WIDTH / 2 + math.sin(t * 0.18) * 220,
             SCREEN_HEIGHT / 2 + math.cos(t * 0.14) * 70,
@@ -51,7 +64,10 @@ class MenuState(GameState):
         self.ui.draw_backdrop(screen, game, focus)
         self.ui.draw(screen)
 
+
 class CinematicIntroState(GameState):
+    """Placa estática da sinopse; Espaço ou clique inicia a floresta."""
+
     def __init__(self):
         audio.play_menu()
         self.page = SynopsisPlate(
@@ -82,8 +98,11 @@ class CinematicIntroState(GameState):
 
 
 class PlayingState(GameState):
+    """Combate da Fase 1: onda de onças e, em seguida, o Mapinguari."""
+
     def __init__(self):
         audio.play_fight()
+        audio.play_onca_roar()
         self.current_zone = f"Floresta — Onça Espectral 1/{ONCA_WAVE_TOTAL}"
         self.hud = RitualHUD()
 
@@ -102,7 +121,6 @@ class PlayingState(GameState):
             game.player.queue_attack(heavy=False)
 
         if event.type == pygame.KEYDOWN and event.key == pygame.K_e:
-            # Coleta de Ervas Medicinais
             collected = pygame.sprite.spritecollide(game.player, game.herbs, True)
             if collected:
                 game.herbs_collected += len(collected)
@@ -111,16 +129,22 @@ class PlayingState(GameState):
     def update(self, game):
         keys = pygame.key.get_pressed()
         mouse_pressed = pygame.mouse.get_pressed()
-        
+
+        # Jogador e hitboxes da lança
         game.player.update(keys, mouse_pressed)
+        if getattr(game.player, "_roar_fx", False):
+            game.fx.yaguar_roar(game.player)
+            game.player._roar_fx = False
         strike = game.player.pop_strike()
         if strike:
             game.attack_hitboxes.add(strike)
             heavy = getattr(game.player, "_heavy", False)
-            game.fx.slash_attack(strike.rect, game.player.facing, heavy=heavy)
+            enchanted = getattr(game.player, "spear_magic", 0) > 0
+            game.fx.slash_attack(strike.rect, game.player.facing, heavy=heavy, enchanted=enchanted)
         game.attack_hitboxes.update()
         game.enemies.update(game.player.hurtbox.center)
 
+        # Golpes corpo a corpo dos inimigos e tronco do Mapinguari
         for enemy in list(game.enemies):
             if hasattr(enemy, "pop_melee"):
                 melee = enemy.pop_melee()
@@ -147,6 +171,7 @@ class PlayingState(GameState):
                     game.change_state(GameOverState())
                     return
 
+        # Lança do jogador contra hurtboxes inimigas
         for hb in list(game.attack_hitboxes):
             for enemy in list(game.enemies):
                 if hb.rect.colliderect(enemy.hurtbox):
@@ -155,7 +180,10 @@ class PlayingState(GameState):
                     game.fx.hit_enemy(enemy.hurtbox.centerx, enemy.hurtbox.centery, game.player.facing, hb.damage, heavy)
                     hb.kill()
                     if enemy.health <= 0:
-                        audio.play_yaguar_roar()
+                        game.player.roar()
+                        if getattr(game.player, "_roar_fx", False):
+                            game.fx.yaguar_roar(game.player)
+                            game.player._roar_fx = False
                         if isinstance(enemy, SpectralJaguar):
                             game.jaguars_defeated += 1
                             if game.jaguars_defeated < ONCA_WAVE_TOTAL:
@@ -177,6 +205,7 @@ class PlayingState(GameState):
             game.herbs_collected += len(collected)
             game.player.health = min(game.player.max_health, game.player.health + 25)
 
+        # Contato corpo a corpo: dano de empurrão, exceto no meio do ataque do jogador
         for enemy in list(game.enemies):
             if game.player.hurtbox.colliderect(enemy.hurtbox):
                 if game.player.attacking:
@@ -195,6 +224,7 @@ class PlayingState(GameState):
             game.zone_stage = 1
 
         game.fx.tick_flashes(game.all_sprites)
+        game.fx.tick_spear_magic(game.player)
         game.fx.update()
         game.parallax.update()
         self.hud.update(game)
@@ -209,6 +239,7 @@ class PlayingState(GameState):
         for herb in game.herbs:
             screen.blit(herb.image, herb.rect.move(ox, oy))
         for spr in game.all_sprites:
+            # Pisca o jogador nos i-frames, a menos que esteja no flash de hit
             if (
                 spr is game.player
                 and game.player.invuln > 0
@@ -218,6 +249,7 @@ class PlayingState(GameState):
             ):
                 continue
             blit_flashed(screen, spr, (ox, oy))
+        game.fx.draw_spear_magic(screen, game.player)
         for proj in game.projectiles:
             screen.blit(proj.image, proj.rect.move(ox, oy))
 
@@ -227,6 +259,8 @@ class PlayingState(GameState):
 
 
 class PauseState(GameState):
+    """Congela a partida e desenha o overlay; guarda o PlayingState para retomar."""
+
     def __init__(self, playing: PlayingState):
         self.playing = playing
         self.overlay = PauseOverlay()
@@ -256,6 +290,8 @@ class PauseState(GameState):
 
 
 class VictoryCinematicState(GameState):
+    """Sinopse de missão concluída; R volta ao menu."""
+
     def __init__(self):
         audio.play_menu()
         self.page = SynopsisPlate(
@@ -285,6 +321,8 @@ class VictoryCinematicState(GameState):
 
 
 class GameOverState(GameState):
+    """Sinopse de derrota com véu escarlate; R volta ao menu."""
+
     def __init__(self):
         audio.play_menu()
         self.page = SynopsisPlate(

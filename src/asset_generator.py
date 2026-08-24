@@ -61,6 +61,7 @@ HERB_GOLD = (240, 196, 64, 255)
 # Núcleo gráfico
 # ---------------------------------------------------------------------------
 def _lerp(a: float, b: float, t: float) -> float:
+    """Interpolação linear entre a e b."""
     return a + (b - a) * t
 
 
@@ -70,6 +71,7 @@ def _lerp_rgba(c0: tuple, c1: tuple, t: float) -> tuple[int, int, int, int]:
 
 
 def _blank(w: int, h: int) -> Image.Image:
+    """Canvas transparente na resolução de trabalho (w*SCALE × h*SCALE)."""
     return Image.new("RGBA", (w * SCALE, h * SCALE), (0, 0, 0, 0))
 
 
@@ -188,6 +190,7 @@ def _to_pygame(img: Image.Image) -> pygame.Surface:
 
 
 def _save(img: Image.Image, filename: str) -> None:
+    """Grava PNG com canal alpha em assets/."""
     ASSETS_DIR.mkdir(parents=True, exist_ok=True)
     path = ASSETS_DIR / filename
     surf = _to_pygame(img)
@@ -234,6 +237,7 @@ def _stamp_rotated(dest: Image.Image, sprite: Image.Image, attach: tuple[int, in
 
 
 def create_player() -> Image.Image:
+    """Placeholder 64×64 do guerreiro (usado se o sprite artesanal não existir)."""
     w = h = 64
     size = (w * SCALE, h * SCALE)
     img = _blank(w, h)
@@ -324,6 +328,7 @@ def create_player() -> Image.Image:
 # enemy_beast.png — Anta/Javali Corrompido 48x48
 # ---------------------------------------------------------------------------
 def create_enemy_beast() -> Image.Image:
+    """Placeholder da besta corrompida."""
     w = h = 48
     size = (w * SCALE, h * SCALE)
     img = _blank(w, h)
@@ -378,6 +383,7 @@ def create_enemy_beast() -> Image.Image:
 # boss_onca.png — Espírito da Onça Negra 80x80
 # ---------------------------------------------------------------------------
 def create_boss_onca() -> Image.Image:
+    """Placeholder da onça (fallback; o jogo usa assets/onca/)."""
     w = h = 80
     size = (w * SCALE, h * SCALE)
     img = _blank(w, h)
@@ -461,6 +467,7 @@ def _fur_tufts(size: tuple[int, int], rng: random.Random) -> Image.Image:
 
 
 def create_boss_mapinguari() -> Image.Image:
+    """Placeholder do Mapinguari (fallback; o jogo usa assets/mapinguari/)."""
     w = h = 128
     size = (w * SCALE, h * SCALE)
     rng = random.Random(13)
@@ -535,6 +542,7 @@ def create_boss_mapinguari() -> Image.Image:
 # herb.png — Erva medicinal 32x32
 # ---------------------------------------------------------------------------
 def create_herb() -> Image.Image:
+    """Ícone da erva medicinal 32×32."""
     w = h = 32
     size = (w * SCALE, h * SCALE)
     img = _blank(w, h)
@@ -582,7 +590,11 @@ SPRITE_BUILDERS = {
 
 
 def generate_assets() -> dict[str, pygame.Surface]:
-    """Cria (ou recria) os sprites profissionais e devolve o cache em Surfaces."""
+    """Gera (ou regrava) os placeholders PNG e devolve um cache em Surfaces.
+
+    Os sprites artesanais em assets/player, onca e mapinguari não passam por aqui:
+    este gerador só cobre player.png, bosses de fallback, besta e erva.
+    """
     pygame.init()
     ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 
