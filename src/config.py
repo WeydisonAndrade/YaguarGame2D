@@ -44,6 +44,7 @@ PLAYER_RUN_SPEED = 7.2
 PLAYER_ATTACK_FRAMES = 18          # Duração do golpe da lança, em frames
 PLAYER_INVULN_FRAMES = 26          # I-frames após levar dano sem bloquear
 BLOCK_DAMAGE_FACTOR = 0.22         # Fração de dano que passa no bloqueio
+BLOCK_RECOVERY_FRAMES = 12         # I-frames curtos no bloqueio (chip, não 60 hits/s)
 ATTACK_ACTIVE_START = 13           # Janela em que a hitbox da lança existe
 ATTACK_ACTIVE_END = 6
 HITSTUN_FRAMES = 16

@@ -17,6 +17,7 @@ from src.config import (
     PLAYER_ATTACK_FRAMES,
     PLAYER_INVULN_FRAMES,
     BLOCK_DAMAGE_FACTOR,
+    BLOCK_RECOVERY_FRAMES,
     ATTACK_ACTIVE_START,
     ATTACK_ACTIVE_END,
     HITSTUN_FRAMES,
@@ -257,11 +258,12 @@ class YaguarPlayer(pygame.sprite.Sprite):
             return 0
         if self.blocking:
             amount *= BLOCK_DAMAGE_FACTOR
-        self.health -= amount
+        self.health = max(0.0, self.health - amount)
         if source_x is not None:
             push = -KNOCKBACK if source_x >= self.hurtbox.centerx else KNOCKBACK
             self.rect.x += push
         if self.blocking:
+            self.invuln = BLOCK_RECOVERY_FRAMES
             self.flash_timer = 6
             self.flash_color = (255, 230, 150)
         else:

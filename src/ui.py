@@ -133,7 +133,6 @@ class RitualMenu:
 
         self.vignette = _make_vignette()
         self.wash = _make_wash()
-        self.cta_rect = pygame.Rect(0, 0, 0, 0)
         self.time = 0.0
         self.embers = [
             {
@@ -146,6 +145,11 @@ class RitualMenu:
             for _ in range(22)
         ]
 
+        cta_label = self.font_cta.render(
+            "Pressione  ESPAÇO  para responder ao chamado", True, COLOR_GOLD_LEAF
+        )
+        self.cta_rect = cta_label.get_rect(center=(SCREEN_WIDTH // 2, 500)).inflate(36, 18)
+
         self.left_rites = (
             (("A / D", "Setas"), "Andar"),
             (("SHIFT",), "Correr"),
@@ -154,9 +158,9 @@ class RitualMenu:
         )
         self.right_rites = (
             (("J", "Clique Esq."), "Ataque com lança"),
-            (("K", "Clique Dir."), "Defesa ancestral"),
+            (("Clique Dir.",), "Garra espiritual"),
+            (("K", "CTRL"), "Defesa ancestral"),
             (("E",), "Ervas sagradas"),
-            (("ESC", "P"), "Pausar"),
         )
 
     def update(self, dt: float = 1 / 60) -> None:
@@ -343,9 +347,14 @@ class PauseOverlay:
         self.font_sub = load_font(_TITLE_FONTS, 18)
         self.font_btn = load_font(_BODY_FONTS, 18, bold=True)
         self.font_hint = load_font(_BODY_FONTS, 14)
-        self.resume_rect = pygame.Rect(0, 0, 0, 0)
-        self.menu_rect = pygame.Rect(0, 0, 0, 0)
         self.time = 0.0
+        panel = pygame.Rect(262, 128, 500, 344)
+        self.resume_rect = self._choice_rect("Continuar a jornada", panel.centerx, panel.y + 176)
+        self.menu_rect = self._choice_rect("Retornar ao menu", panel.centerx, panel.y + 236)
+
+    def _choice_rect(self, label: str, cx: int, cy: int) -> pygame.Rect:
+        text = self.font_btn.render(label, True, COLOR_PARCHMENT)
+        return text.get_rect(center=(cx, cy)).inflate(48, 16)
 
     def update(self, dt: float = 1 / 60) -> None:
         self.time += dt

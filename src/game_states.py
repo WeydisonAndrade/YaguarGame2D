@@ -24,6 +24,14 @@ def _separate(player, enemy) -> None:
         enemy.rect.x -= 14
 
 
+def _defeat_player(game) -> bool:
+    """Encerra a partida se o Yáguar caiu; True quando o estado já mudou."""
+    if game.player.health <= 0:
+        game.change_state(GameOverState())
+        return True
+    return False
+
+
 class GameState:
     """Interface mínima de uma tela. Subclasses preenchem só o que precisam."""
 
@@ -154,6 +162,8 @@ class PlayingState(GameState):
                     dealt = game.player.take_damage(extra, enemy.hurtbox.centerx)
                     if dealt:
                         game.fx.player_hurt(game.player.hurtbox.centerx, game.player.hurtbox.centery, dealt, blocked)
+                    if _defeat_player(game):
+                        return
             if isinstance(enemy, MapinguariBoss):
                 log = enemy.pop_log()
                 if log:
@@ -167,8 +177,7 @@ class PlayingState(GameState):
                 if dealt:
                     game.fx.player_hurt(game.player.hurtbox.centerx, game.player.hurtbox.centery, dealt, blocked)
                 log.kill()
-                if game.player.health <= 0:
-                    game.change_state(GameOverState())
+                if _defeat_player(game):
                     return
 
         # Lança do jogador contra hurtboxes inimigas
@@ -216,8 +225,7 @@ class PlayingState(GameState):
                 if dealt:
                     game.fx.player_hurt(game.player.hurtbox.centerx, game.player.hurtbox.centery, dealt, blocked)
                 _separate(game.player, enemy)
-                if game.player.health <= 0:
-                    game.change_state(GameOverState())
+                if _defeat_player(game):
                     return
 
         if game.zone_stage == 0 and len(game.enemies) == 0:
