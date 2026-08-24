@@ -1,0 +1,50 @@
+import pygame
+
+# Configurações da Janela
+SCREEN_WIDTH = 1024
+SCREEN_HEIGHT = 600
+FPS = 60
+
+# Cores
+COLOR_BG_VILLAGE = (34, 112, 34)      # Verde Aldeia/Floresta
+COLOR_BG_CORRUPT = (20, 30, 25)       # Floresta Corrompida
+COLOR_TEXT = (245, 245, 220)
+COLOR_GOLD = (255, 215, 0)
+COLOR_RED = (200, 30, 30)
+COLOR_PURPLE = (128, 0, 128)
+COLOR_BLUE = (0, 191, 255)
+
+# Paleta ritual do menu (ouro velho, musgo, pergaminho)
+COLOR_GOLD_LEAF = (214, 172, 78)
+COLOR_GOLD_BRIGHT = (242, 214, 132)
+COLOR_GOLD_SHADOW = (118, 76, 28)
+COLOR_PARCHMENT = (232, 218, 188)
+COLOR_INK = (22, 16, 12)
+COLOR_BARK = (46, 30, 18)
+COLOR_MOSS = (58, 86, 52)
+COLOR_SCARLET = (156, 38, 34)
+
+# Metas de Jogo (Condição de Vitória da Fase 1)
+TOTAL_HERBS_TO_COLLECT = 3
+VICTORY_PROGRESS_MAX = 3  # 1: Limpar Aldeia, 2: Derrotar Onça Negra, 3: Derrotar Mapinguari
+
+# Plataforma 2D (Aladdin / Mortal Kombat)
+GRAVITY = 0.78
+JUMP_VELOCITY = -15.5
+PLAYER_WALK_SPEED = 4.4
+PLAYER_RUN_SPEED = 7.2
+PLAYER_ATTACK_FRAMES = 18
+PLAYER_INVULN_FRAMES = 26
+BLOCK_DAMAGE_FACTOR = 0.22
+ATTACK_ACTIVE_START = 13
+ATTACK_ACTIVE_END = 6
+HITSTUN_FRAMES = 16
+KNOCKBACK = 22
+GROUND_Y = 478
+ONCA_SCALE = 0.78
+ONCA_WAVE_TOTAL = 3
+
+# (x, y, w, h) — chão na laje de pedra da floresta
+PLATFORMS = (
+    (0, GROUND_Y, SCREEN_WIDTH, 170),
+)
