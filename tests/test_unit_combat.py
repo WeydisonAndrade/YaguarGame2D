@@ -88,6 +88,16 @@ def test_cooldown_impede_novo_golpe_imediatamente():
     assert player.queued_attack is None
 
 
+def test_rugido_a_cada_dez_golpes_de_lanca():
+    player = YaguarPlayer(200, GROUND_Y)
+    for _ in range(9):
+        player._begin_attack(heavy=False)
+        assert player.spear_magic == 0
+    player._begin_attack(heavy=False)
+    assert player.spear_attacks == 10
+    assert player.spear_magic == 56
+
+
 def test_andar_para_direita_avanca_e_vira_o_facing():
     player = YaguarPlayer(200, GROUND_Y)
     x0 = player.rect.midbottom[0]

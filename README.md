@@ -34,7 +34,7 @@ Se você clonou o repositório `YaguarGame2D`, a raiz do clone já é essa pasta
 
 O `main.py` gera placeholders em `assets/` se faltarem e abre o menu ritual.
 
-Para enviar o projeto a outra pessoa, zipar **esta pasta inteira** (código + `assets/`). Sem `assets/player`, `assets/onca`, `assets/mapinguari` e `assets/parallax` o jogo não desenha corretamente.
+Para enviar o projeto a outra pessoa, zipar **esta pasta inteira** (código + `assets/`). Sem `assets/player`, `assets/onca`, `assets/mapinguari`, `assets/parallax` e `assets/cinematic_animation` o jogo não desenha corretamente.
 
 ---
 
@@ -43,15 +43,15 @@ Para enviar o projeto a outra pessoa, zipar **esta pasta inteira** (código + `a
 A sessão é uma máquina de estados. `Game` guarda a janela, o mundo e os grupos de sprites; cada tela (menu, partida, pausa…) trata eventos, lógica e desenho.
 
 ```
-Menu  →  Sinopse  →  Partida  →  Pausa
-                      ↓    ↓
-                 Vitória  Derrota  →  Menu (tecla R)
+Menu  →  Cinemática  →  Partida  →  Pausa
+                           ↓    ↓
+                      Vitória  Derrota  →  Menu (tecla R)
 ```
 
 | Tela | O que acontece |
 |---|---|
-| **Menu** | Floresta viva, ritos do guerreiro. `Espaço` ou clique no chamado abre a sinopse. |
-| **Sinopse** | Placa da Fase I. `Espaço` ou clique começa a floresta. |
+| **Menu** | Floresta viva, ritos do guerreiro. `Espaço` ou clique no chamado abre a cinemática. |
+| **Cinemática** | Seis pinturas da origem. Clique avança o quadro; `Espaço` ou `ESC` pula para a floresta. |
 | **Partida** | Combate: três onças espectrais, depois o Mapinguari. |
 | **Pausa** | Congela a luta. `Espaço` / `ESC` / `P` continua; `M` volta ao menu. |
 | **Vitória** | O espírito do Mapinguari foi purificado. `R` retorna ao menu. |
@@ -68,7 +68,7 @@ Três **ervas sagradas** estão no chão. Andar sobre elas (ou `E`) cura **25** 
 
 ### Combate
 
-- **Lança** (golpe leve): hitbox só na janela ativa do ataque. A cada 5 golpes, Yáguar **ruge** e encanta a lança por alguns instantes.
+- **Lança** (golpe leve): hitbox só na janela ativa do ataque. A cada 10 golpes, Yáguar **ruge** e encanta a lança por alguns instantes.
 - **Garra Espiritual** (golpe pesado): mais alcance e dano; só depois da terceira onça.
 - **Defesa**: reduz o dano a 22% e ganha uma recuperação curta (não é invencível; ainda passa chip).
 - **I-frames** após hit sem bloqueio. Vida não desce abaixo de zero; HP 0 vai para a derrota, inclusive se o golpe for só a hitbox da onça (sem encostar o corpo).
@@ -110,8 +110,9 @@ yaguar_game/
     parallax.py        pinturas da floresta
     fx.py              cortes, shake, flash
     player_anim.py     poses do protagonista
+    cinematic.py       introdução em seis pinturas
     asset_generator.py placeholders PNG
-  assets/              sprites, parallax, música, SFX
+  assets/              sprites, parallax, cinemática, música, SFX
   tests/               pirâmide de testes (unidade → integração → sistema)
 ```
 

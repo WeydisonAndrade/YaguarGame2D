@@ -18,14 +18,14 @@ def _key(key: int) -> pygame.event.Event:
     return pygame.event.Event(pygame.KEYDOWN, key=key)
 
 
-def test_espaco_no_menu_abre_a_sinopse():
+def test_espaco_no_menu_abre_a_cinematica():
     game = Game()
     assert isinstance(game.state, MenuState)
     game.state.handle_events(game, _key(pygame.K_SPACE))
     assert isinstance(game.state, CinematicIntroState)
 
 
-def test_espaco_na_sinopse_comeca_a_partida():
+def test_espaco_na_cinematica_pula_para_a_partida():
     game = Game()
     game.change_state(CinematicIntroState())
     game.state.handle_events(game, _key(pygame.K_SPACE))

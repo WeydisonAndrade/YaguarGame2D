@@ -42,6 +42,7 @@ JUMP_VELOCITY = -15.5
 PLAYER_WALK_SPEED = 4.4
 PLAYER_RUN_SPEED = 7.2
 PLAYER_ATTACK_FRAMES = 18          # Duração do golpe da lança, em frames
+SPEAR_ROAR_EVERY = 10              # Rugido do Yáguar a cada N golpes de lança
 PLAYER_INVULN_FRAMES = 26          # I-frames após levar dano sem bloquear
 BLOCK_DAMAGE_FACTOR = 0.22         # Fração de dano que passa no bloqueio
 BLOCK_RECOVERY_FRAMES = 12         # I-frames curtos no bloqueio (chip, não 60 hits/s)
@@ -61,4 +62,35 @@ ONCA_RUN_DISTANCE = 150            # Distância a partir da qual ela galopa
 # Plataforma única: laje de pedra que cobre a largura da tela
 PLATFORMS = (
     (0, GROUND_Y, SCREEN_WIDTH, 170),
+)
+
+# ---------------------------------------------------------------------------
+# Cinemática da introdução (após o menu, antes da partida)
+# ---------------------------------------------------------------------------
+CINEMATIC_HOLD_FRAMES = 170        # Tempo de cada quadro visível (~2,8 s)
+CINEMATIC_FADE_FRAMES = 36         # Crossfade entre quadros
+CINEMATIC_ZOOM = 1.12              # Ken Burns: cobertura extra para o zoom
+CINEMATIC_FILES = (
+    "img01.png",
+    "img02.png",
+    "img03.png",
+    "img04.png",
+    "img05.png",
+    "img06.png",
+)
+CINEMATIC_CAPTIONS = (
+    "Há milhares de anos, a tribo recebeu o Coração da Floresta.",
+    "Na noite da Lua Escarlate, o céu se partiu.",
+    "Uma entidade cósmica invadiu o templo.",
+    "O antigo Pajé foi derrotado. O artefato foi roubado.",
+    "A corrupção se espalha. Os rios secam. Os animais enlouquecem.",
+    "Yáguar, o maior guerreiro da tribo, jura salvar a Amazônia.",
+)
+CINEMATIC_PANS = (
+    (0.35, -0.25),
+    (-0.30, 0.20),
+    (0.40, 0.10),
+    (-0.20, -0.35),
+    (0.15, 0.30),
+    (0.00, -0.40),
 )

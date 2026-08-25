@@ -15,6 +15,7 @@ from src.config import (
     PLAYER_WALK_SPEED,
     PLAYER_RUN_SPEED,
     PLAYER_ATTACK_FRAMES,
+    SPEAR_ROAR_EVERY,
     PLAYER_INVULN_FRAMES,
     BLOCK_DAMAGE_FACTOR,
     BLOCK_RECOVERY_FRAMES,
@@ -104,7 +105,7 @@ class YaguarPlayer(pygame.sprite.Sprite):
         self.flash_timer = 0
         self.flash_color = (255, 255, 255)
         self._heavy = False
-        self.spear_attacks = 0  # Conta golpes de lança para o rugido a cada 5
+        self.spear_attacks = 0  # Conta golpes de lança para o rugido a cada SPEAR_ROAR_EVERY
         self.spear_magic = 0    # Frames de encantamento da lança após o rugido
         self._roar_fx = False
 
@@ -228,7 +229,7 @@ class YaguarPlayer(pygame.sprite.Sprite):
         self._heavy = heavy
         if not heavy:
             self.spear_attacks += 1
-            if self.spear_attacks % 5 == 0:
+            if self.spear_attacks % SPEAR_ROAR_EVERY == 0:
                 self.roar()
 
     def _try_spawn_strike(self) -> None:

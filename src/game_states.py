@@ -12,6 +12,7 @@ from src.config import (SCREEN_WIDTH, SCREEN_HEIGHT, COLOR_TEXT, COLOR_GOLD,
 from src.entities import YaguarPlayer, SpectralJaguar, MapinguariBoss, HerbItem
 from src.fx import blit_flashed
 from src.ui import PauseOverlay, RitualHUD, RitualMenu, SynopsisPlate
+from src.cinematic import CinematicSequence
 
 
 def _separate(player, enemy) -> None:
@@ -74,35 +75,34 @@ class MenuState(GameState):
 
 
 class CinematicIntroState(GameState):
-    """Placa estática da sinopse; Espaço ou clique inicia a floresta."""
+    """Pinturas da origem: após o menu, antes da floresta. Espaço pula; clique avança."""
 
     def __init__(self):
         audio.play_menu()
-        self.page = SynopsisPlate(
-            "FASE I  ·  O CORAÇÃO DA FLORESTA",
-            "O Chamado",
-            (
-                "Há milhares de anos, a tribo recebeu o Coração da Floresta.",
-                "Na noite da Lua Escarlate, uma entidade cósmica invadiu o templo.",
-                "O antigo Pajé foi derrotado e o artefato, roubado.",
-                "A corrupção se espalha. Os rios secam. Os animais enlouquecem.",
-                "",
-                "Yáguar, o maior guerreiro da tribo, jura salvar a Amazônia.",
-            ),
-            "Pressione  ESPAÇO  para avançar à floresta",
-            scene=0,
-        )
+        self.cine = CinematicSequence()
+
+    def _begin_play(self, game) -> None:
+        game.reset_level()
+        game.change_state(PlayingState())
 
     def handle_events(self, game, event):
         if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-            game.reset_level()
-            game.change_state(PlayingState())
+            self._begin_play(game)
+        elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            self._begin_play(game)
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            game.reset_level()
-            game.change_state(PlayingState())
+            if self.cine.done or self.cine.index >= max(0, self.cine.shot_count - 1):
+                self._begin_play(game)
+            else:
+                self.cine.advance()
+
+    def update(self, game):
+        self.cine.update()
+        if self.cine.done:
+            self._begin_play(game)
 
     def draw(self, game, screen):
-        self.page.draw(game, screen)
+        self.cine.draw(screen)
 
 
 class PlayingState(GameState):

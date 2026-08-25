@@ -32,6 +32,8 @@ REQUIRED_IMAGES = (
     "herb.png",
     "parallax/forest1.png",
     "parallax/forest2.png",
+    "cinematic_animation/img01.png",
+    "cinematic_animation/img06.png",
 )
 
 
