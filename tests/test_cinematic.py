@@ -80,3 +80,10 @@ def test_cinematica_desenha_um_frame_sem_erro():
     screen = pygame.display.get_surface()
     game.state.draw(game, screen)
     assert screen.get_width() == 1024
+
+
+def test_cinematica_do_mapinguari_carrega_sete_quadros():
+    seq = CinematicSequence.mapinguari()
+    assert seq.shot_count == 7
+    assert seq.done is False
+    assert "MAPINGUARI" in seq.kicker

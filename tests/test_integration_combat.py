@@ -32,8 +32,10 @@ def test_golpe_da_lanca_derrota_a_onca_e_spawna_a_proxima(game, monkeypatch):
     assert "2/3" in game.state.current_zone
 
 
-def test_terceira_onca_libera_garra_e_chama_o_mapinguari(game, monkeypatch):
+def test_terceira_onca_abre_a_cinematica_do_mapinguari(game, monkeypatch):
     _idle_keys(monkeypatch)
+    from src.game_states import BossCinematicState
+
     for wave in range(ONCA_WAVE_TOTAL):
         enemy = next(iter(game.enemies))
         hb = AttackHitbox(enemy.hurtbox.x, enemy.hurtbox.y, 260, 220, 999)
@@ -43,9 +45,13 @@ def test_terceira_onca_libera_garra_e_chama_o_mapinguari(game, monkeypatch):
     assert game.jaguars_defeated == ONCA_WAVE_TOTAL
     assert game.player.has_garra_espiritual is True
     assert game.zone_stage == 2
+    assert isinstance(game.state, BossCinematicState)
+    assert not any(isinstance(e, MapinguariBoss) for e in game.enemies)
+
+    game.state.handle_events(game, pygame.event.Event(pygame.KEYDOWN, key=pygame.K_SPACE))
+    assert isinstance(game.state, PlayingState)
     bosses = [e for e in game.enemies if isinstance(e, MapinguariBoss)]
     assert len(bosses) == 1
-    assert isinstance(game.state, PlayingState)
 
 
 def test_derrotar_o_mapinguari_vai_para_vitoria(game, monkeypatch):

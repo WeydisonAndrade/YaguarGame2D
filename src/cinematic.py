@@ -1,4 +1,4 @@
-"""Sequência cinemática da introdução: seis pinturas com zoom, fade e legendas."""
+"""Sequências cinemáticas: introdução da Fase I e entrada do Mapinguari."""
 
 from __future__ import annotations
 
@@ -7,6 +7,11 @@ from pathlib import Path
 import pygame
 
 from src.config import (
+    BOSS_CINEMATIC_CAPTIONS,
+    BOSS_CINEMATIC_FILES,
+    BOSS_CINEMATIC_FOLDER,
+    BOSS_CINEMATIC_KICKER,
+    BOSS_CINEMATIC_PANS,
     CINEMATIC_CAPTIONS,
     CINEMATIC_FADE_FRAMES,
     CINEMATIC_FILES,
@@ -23,7 +28,6 @@ from src.config import (
 from src.ui import blit_centered, load_font
 
 ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
-CINE_DIR = ASSETS_DIR / "cinematic_animation"
 
 _TITLE_FONTS = (
     "palatinolinotype",
@@ -45,7 +49,7 @@ _BODY_FONTS = (
     "serif",
 )
 
-_frame_cache: list[pygame.Surface] | None = None
+_frame_cache: dict[str, list[pygame.Surface]] = {}
 
 
 def _cover_scale(raw: pygame.Surface, tw: int, th: int) -> pygame.Surface:
@@ -58,38 +62,64 @@ def _cover_scale(raw: pygame.Surface, tw: int, th: int) -> pygame.Surface:
     return pygame.transform.smoothscale(raw, size)
 
 
-def load_cinematic_frames() -> list[pygame.Surface]:
-    """Carrega e redimensiona os PNGs uma vez; devolve lista vazia se faltarem."""
-    global _frame_cache
-    if _frame_cache is not None:
-        return _frame_cache
+def load_cinematic_frames(folder: str, files: tuple[str, ...]) -> list[pygame.Surface]:
+    """Carrega e redimensiona os PNGs uma vez por pasta; lista vazia se faltarem."""
+    cached = _frame_cache.get(folder)
+    if cached is not None:
+        return cached
 
     target = (
         int(SCREEN_WIDTH * CINEMATIC_ZOOM),
         int(SCREEN_HEIGHT * CINEMATIC_ZOOM),
     )
     frames: list[pygame.Surface] = []
-    for name in CINEMATIC_FILES:
-        path = CINE_DIR / name
+    directory = ASSETS_DIR / folder
+    for name in files:
+        path = directory / name
         if not path.is_file():
             continue
         raw = pygame.image.load(str(path)).convert()
         frames.append(_cover_scale(raw, *target))
-    _frame_cache = frames
+    _frame_cache[folder] = frames
     return frames
 
 
 class CinematicSequence:
-    """Avança os quadros com Ken Burns, crossfade e legendas da Fase I."""
+    """Avança os quadros com Ken Burns, crossfade e legendas."""
 
-    def __init__(self) -> None:
-        self.frames = load_cinematic_frames()
+    def __init__(
+        self,
+        folder: str = "cinematic_animation",
+        files: tuple[str, ...] | None = None,
+        captions: tuple[str, ...] | None = None,
+        pans: tuple[tuple[float, float], ...] | None = None,
+        kicker: str = "FASE I  ·  O CORAÇÃO DA FLORESTA",
+    ) -> None:
+        self.files = files or CINEMATIC_FILES
+        self.captions = captions or CINEMATIC_CAPTIONS
+        self.pans = pans or CINEMATIC_PANS
+        self.kicker = kicker
+        self.frames = load_cinematic_frames(folder, self.files)
         self.index = 0
         self.timer = 0
         self.done = len(self.frames) == 0
         self.font_caption = load_font(_TITLE_FONTS, 22)
         self.font_hint = load_font(_BODY_FONTS, 14)
         self.letter_h = 56
+
+    @classmethod
+    def intro(cls) -> "CinematicSequence":
+        return cls()
+
+    @classmethod
+    def mapinguari(cls) -> "CinematicSequence":
+        return cls(
+            folder=BOSS_CINEMATIC_FOLDER,
+            files=BOSS_CINEMATIC_FILES,
+            captions=BOSS_CINEMATIC_CAPTIONS,
+            pans=BOSS_CINEMATIC_PANS,
+            kicker=BOSS_CINEMATIC_KICKER,
+        )
 
     @property
     def shot_count(self) -> int:
@@ -137,6 +167,11 @@ class CinematicSequence:
         oy = max(0, min(max_oy, oy))
         screen.blit(frame, (0, 0), pygame.Rect(ox, oy, SCREEN_WIDTH, SCREEN_HEIGHT))
 
+    def _pan_at(self, index: int) -> tuple[float, float]:
+        if not self.pans:
+            return (0.0, 0.0)
+        return self.pans[index % len(self.pans)]
+
     def _hold_progress(self) -> float:
         return min(1.0, self.timer / max(1, CINEMATIC_HOLD_FRAMES))
 
@@ -153,22 +188,21 @@ class CinematicSequence:
             return
 
         t = self._hold_progress()
-        pan = CINEMATIC_PANS[self.index % len(CINEMATIC_PANS)]
+        pan = self._pan_at(self.index)
         self._ken_burns_blit(screen, self.frames[self.index], t, pan)
 
         fade = self._fade_alpha()
         last = self.index >= len(self.frames) - 1
         if fade > 0:
-            overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
             if last:
+                overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
                 overlay.fill(COLOR_INK)
                 overlay.set_alpha(fade)
                 screen.blit(overlay, (0, 0))
             else:
                 nxt = self.frames[self.index + 1]
-                n_pan = CINEMATIC_PANS[(self.index + 1) % len(CINEMATIC_PANS)]
                 temp = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-                self._ken_burns_blit(temp, nxt, 0.0, n_pan)
+                self._ken_burns_blit(temp, nxt, 0.0, self._pan_at(self.index + 1))
                 temp.set_alpha(fade)
                 screen.blit(temp, (0, 0))
 
@@ -183,10 +217,10 @@ class CinematicSequence:
             1,
         )
 
-        kicker = self.font_hint.render("FASE I  ·  O CORAÇÃO DA FLORESTA", True, COLOR_GOLD_LEAF)
+        kicker = self.font_hint.render(self.kicker, True, COLOR_GOLD_LEAF)
         blit_centered(screen, kicker, (SCREEN_WIDTH // 2, self.letter_h // 2))
 
-        caption = CINEMATIC_CAPTIONS[self.index] if self.index < len(CINEMATIC_CAPTIONS) else ""
+        caption = self.captions[self.index] if self.index < len(self.captions) else ""
         if caption:
             band = pygame.Surface((SCREEN_WIDTH, 78), pygame.SRCALPHA)
             band.fill((12, 8, 6, 170))

@@ -44,15 +44,16 @@ A sessão é uma máquina de estados. `Game` guarda a janela, o mundo e os grupo
 
 ```
 Menu  →  Cinemática  →  Partida  →  Pausa
-                           ↓    ↓
-                      Vitória  Derrota  →  Menu (tecla R)
+                           ↓         ↓
+                    Mapinguari    Vitória / Derrota →  Menu (R)
 ```
 
 | Tela | O que acontece |
 |---|---|
 | **Menu** | Floresta viva, ritos do guerreiro. `Espaço` ou clique no chamado abre a cinemática. |
 | **Cinemática** | Seis pinturas da origem. Clique avança o quadro; `Espaço` ou `ESC` pula para a floresta. |
-| **Partida** | Combate: três onças espectrais, depois o Mapinguari. |
+| **Partida** | Combate: três onças espectrais. A terceira abre a cinemática do Mapinguari. |
+| **Mapinguari** | Sete pinturas da arena. Clique avança; Espaço ou ESC inicia o chefe. |
 | **Pausa** | Congela a luta. `Espaço` / `ESC` / `P` continua; `M` volta ao menu. |
 | **Vitória** | O espírito do Mapinguari foi purificado. `R` retorna ao menu. |
 | **Derrota** | A vida chegou a zero. `R` tenta de novo pelo menu. |
@@ -61,7 +62,7 @@ Menu  →  Cinemática  →  Partida  →  Pausa
 
 1. Derrotar **3 onças espectrais** (uma de cada vez).
 2. A terceira onça **libera a Garra Espiritual**.
-3. O cenário muda e surge o **Mapinguari**.
+3. A terceira onça abre a cinemática da arena; em seguida surge o **Mapinguari**.
 4. Derrotar o chefe conclui a prova.
 
 Três **ervas sagradas** estão no chão. Andar sobre elas (ou `E`) cura **25** de vida, até o máximo de 100.

@@ -94,3 +94,36 @@ CINEMATIC_PANS = (
     (0.15, 0.30),
     (0.00, -0.40),
 )
+
+# ---------------------------------------------------------------------------
+# Cinemática do Mapinguari (após a 3ª onça, antes do combate com o chefe)
+# ---------------------------------------------------------------------------
+BOSS_CINEMATIC_FOLDER = "battleBoss"
+BOSS_CINEMATIC_FILES = (
+    "imgBattle01.png",
+    "imgBattle02.png",
+    "imgBattle03.png",
+    "imgBattle04.png",
+    "imgBattle05.png",
+    "imgBattle06.png",
+    "imgBaattle07.png",
+)
+BOSS_CINEMATIC_CAPTIONS = (
+    "O Caminho da Montanha Sagrada se abre.",
+    "Yáguar avança à arena do Guardião.",
+    "A caverna chama. O templo espera.",
+    "O Mapinguari salta das trevas.",
+    "Ninguém passa sem provar seu valor.",
+    "«Eu sou o Mapinguari, o Guardião deste portal.»",
+    "Se queres a verdade... terás que me enfrentar.",
+)
+BOSS_CINEMATIC_PANS = (
+    (0.40, -0.20),
+    (-0.25, 0.15),
+    (0.10, -0.35),
+    (0.00, -0.45),
+    (-0.15, 0.25),
+    (0.30, 0.10),
+    (0.00, -0.30),
+)
+BOSS_CINEMATIC_KICKER = "FASE I  ·  O MAPINGUARI"

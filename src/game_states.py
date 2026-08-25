@@ -3,6 +3,8 @@
 Cada estado implementa handle_events, update e draw. A PlayingState concentra
 o combate: golpes do jogador, ataques dos inimigos, coleta e transições de onda.
 """
+from __future__ import annotations
+
 import math
 import pygame
 import random
@@ -100,6 +102,37 @@ class CinematicIntroState(GameState):
         self.cine.update()
         if self.cine.done:
             self._begin_play(game)
+
+    def draw(self, game, screen):
+        self.cine.draw(screen)
+
+
+class BossCinematicState(GameState):
+    """Pinturas da arena do Mapinguari; ao terminar, o chefe entra na partida."""
+
+    def __init__(self, playing: PlayingState):
+        self.playing = playing
+        audio.play_mapinguari()
+        self.cine = CinematicSequence.mapinguari()
+
+    def _begin_boss(self, game) -> None:
+        if not any(isinstance(e, MapinguariBoss) for e in game.enemies):
+            game.spawn_mapinguari()
+        game.change_state(self.playing)
+
+    def handle_events(self, game, event):
+        if event.type == pygame.KEYDOWN and event.key in (pygame.K_SPACE, pygame.K_ESCAPE):
+            self._begin_boss(game)
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.cine.done or self.cine.index >= max(0, self.cine.shot_count - 1):
+                self._begin_boss(game)
+            else:
+                self.cine.advance()
+
+    def update(self, game):
+        self.cine.update()
+        if self.cine.done:
+            self._begin_boss(game)
 
     def draw(self, game, screen):
         self.cine.draw(screen)
@@ -204,7 +237,7 @@ class PlayingState(GameState):
                                 game.player.has_garra_espiritual = True
                                 game.zone_stage = 2
                                 self.current_zone = "Caminho da Montanha Sagrada"
-                                game.spawn_mapinguari()
+                                game.change_state(BossCinematicState(self))
                         elif isinstance(enemy, MapinguariBoss):
                             game.change_state(VictoryCinematicState())
                         enemy.kill()

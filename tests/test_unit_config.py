@@ -35,6 +35,8 @@ REQUIRED_IMAGES = (
     "cinematic_animation/img01.png",
     "cinematic_animation/img06.png",
     "cinematic_animation/epic_music01.mp3",
+    "battleBoss/imgBattle01.png",
+    "battleBoss/imgBaattle07.png",
 )
 
 
