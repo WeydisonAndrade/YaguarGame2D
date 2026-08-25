@@ -78,7 +78,7 @@ class CinematicIntroState(GameState):
     """Pinturas da origem: após o menu, antes da floresta. Espaço pula; clique avança."""
 
     def __init__(self):
-        audio.play_menu()
+        audio.play_cinematic()
         self.cine = CinematicSequence()
 
     def _begin_play(self, game) -> None:
@@ -109,6 +109,7 @@ class PlayingState(GameState):
     """Combate da Fase 1: onda de onças e, em seguida, o Mapinguari."""
 
     def __init__(self):
+        # play_fight() carrega a trilha de combate e encerra o epic_music da cinemática.
         audio.play_fight()
         audio.play_onca_roar()
         self.current_zone = f"Floresta — Onça Espectral 1/{ONCA_WAVE_TOTAL}"

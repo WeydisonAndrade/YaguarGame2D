@@ -14,6 +14,7 @@ ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
 MENU_TRACK = ASSETS_DIR / "music" / "musicStartAndMenu.mp3"
 FIGHT_TRACK = ASSETS_DIR / "music" / "musicGamefight01.mp3"
 MAPINGUARI_TRACK = ASSETS_DIR / "music" / "musicMapinguari.mp3"
+CINEMATIC_TRACK = ASSETS_DIR / "cinematic_animation" / "epic_music01.mp3"
 MAPINGUARI_ROAR = ASSETS_DIR / "sfx" / "MapinguariRugido01.mp3"
 YAGUAR_ROAR = ASSETS_DIR / "sfx" / "roarYaguar01.mp3"
 ONCA_ROAR = ASSETS_DIR / "sfx" / "roarOnca.mp3"
@@ -27,8 +28,8 @@ def init() -> None:
     pygame.mixer.pre_init(44100, -16, 2, 1024)
 
 
-def _play(track_id: str, path: Path, volume: float = 0.55) -> None:
-    """Carrega e entra em loop; ignora se a mesma faixa já estiver tocando."""
+def _play(track_id: str, path: Path, volume: float = 0.55, loops: int = -1) -> None:
+    """Carrega a faixa; loops=-1 entra em ciclo, 0 toca uma vez."""
     global _current
     if _current == track_id and pygame.mixer.get_init() and pygame.mixer.music.get_busy():
         return
@@ -37,19 +38,24 @@ def _play(track_id: str, path: Path, volume: float = 0.55) -> None:
     try:
         pygame.mixer.music.load(str(path))
         pygame.mixer.music.set_volume(volume)
-        pygame.mixer.music.play(-1)
+        pygame.mixer.music.play(loops)
         _current = track_id
     except pygame.error:
         _current = None
 
 
 def play_menu() -> None:
-    """Tema do menu, da abertura, da vitória e da derrota."""
+    """Tema do menu, da vitória e da derrota."""
     _play("menu", MENU_TRACK, 0.55)
 
 
+def play_cinematic() -> None:
+    """Tema épico da introdução; a partida encerra esta faixa."""
+    _play("cinematic", CINEMATIC_TRACK, 0.62, loops=0)
+
+
 def play_fight() -> None:
-    """Tema das onças espectrais durante a partida."""
+    """Tema das onças espectrais; substitui a trilha da cinemática."""
     _play("fight", FIGHT_TRACK, 0.5)
 
 

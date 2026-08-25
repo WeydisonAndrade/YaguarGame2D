@@ -60,6 +60,20 @@ def test_cinematica_concluida_abre_a_partida():
     assert isinstance(game.state, PlayingState)
 
 
+def test_partida_encerra_a_trilha_epica_da_cinematica():
+    from src import audio
+
+    assert audio.CINEMATIC_TRACK.is_file()
+    game = Game()
+    game.change_state(CinematicIntroState())
+    if audio._current == "cinematic":
+        game.state.handle_events(
+            game, pygame.event.Event(pygame.KEYDOWN, key=pygame.K_SPACE)
+        )
+        assert audio._current == "fight"
+        assert isinstance(game.state, PlayingState)
+
+
 def test_cinematica_desenha_um_frame_sem_erro():
     game = Game()
     game.change_state(CinematicIntroState())

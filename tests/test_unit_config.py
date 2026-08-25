@@ -34,6 +34,7 @@ REQUIRED_IMAGES = (
     "parallax/forest2.png",
     "cinematic_animation/img01.png",
     "cinematic_animation/img06.png",
+    "cinematic_animation/epic_music01.mp3",
 )
 
 
