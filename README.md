@@ -52,7 +52,8 @@ Menu  →  Cinemática  →  Partida  →  Pausa
 |---|---|
 | **Menu** | Floresta viva, ritos do guerreiro. `Espaço` ou clique no chamado abre a cinemática. |
 | **Cinemática** | Seis pinturas da origem. Clique avança o quadro; `Espaço` ou `ESC` pula para a floresta. |
-| **Partida** | Combate: três onças espectrais. A terceira abre a cinemática do Mapinguari. |
+| **Partida** | Combate: três onças. A terceira abre o caminho à direita, na mesma floresta. |
+| **Clareira** | Continuação da arena. A câmera segue; D entra nas fendas, A volta à arena vazia. |
 | **Mapinguari** | Sete pinturas da arena. Clique avança; Espaço ou ESC inicia o chefe. |
 | **Pausa** | Congela a luta. `Espaço` / `ESC` / `P` continua; `M` volta ao menu. |
 | **Vitória** | O espírito do Mapinguari foi purificado. `R` retorna ao menu. |
@@ -60,10 +61,11 @@ Menu  →  Cinemática  →  Partida  →  Pausa
 
 ### Missão da Fase 1
 
-1. Derrotar **3 onças espectrais** (uma de cada vez).
+1. Derrotar **3 onças** (pintada, pantera e espectral, uma de cada vez).
 2. A terceira onça **libera a Garra Espiritual**.
-3. A terceira onça abre a cinemática da arena; em seguida surge o **Mapinguari**.
-4. Derrotar o chefe conclui a prova.
+3. Andar à direita na mesma floresta até a **clareira das fendas** (é possível voltar à arena). Pular as fendas na grama.
+4. No lado direito das fendas abre a cinemática; em seguida surge o **Mapinguari**.
+5. Derrotar o chefe conclui a prova.
 
 Três **ervas sagradas** estão no chão. Andar sobre elas (ou `E`) cura **25** de vida, até o máximo de 100.
 

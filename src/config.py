@@ -55,14 +55,58 @@ GROUND_Y = 478                     # Linha do chão na pintura da floresta
 # Onça espectral: escala visual, onda de 3 e galope
 ONCA_SCALE = 0.78
 ONCA_WAVE_TOTAL = 3
+ONCA_WAVE_KINDS = ("normal", "pantera", "espectral")
 ONCA_WALK_SPEED = 3.4
 ONCA_RUN_SPEED = 7.6
 ONCA_RUN_DISTANCE = 150            # Distância a partir da qual ela galopa
 
-# Plataforma única: laje de pedra que cobre a largura da tela
+# Plataforma única: laje de pedra que cobre a largura da tela (arena das onças)
 PLATFORMS = (
     (0, GROUND_Y, SCREEN_WIDTH, 170),
 )
+
+# ---------------------------------------------------------------------------
+# Clareira das fendas — continua a arena à direita (mesmo chão, câmera segue).
+# Colisão na grama da pintura, alinhada a GROUND_Y. Medida na arte 1024×600:
+#   A 0–257 | fenda 147 | B 404–523 | fenda 186 | C 709–1024
+# Física: andar ≈ 156 px, correr ≈ 273 px. 1ª fenda dá para pular a pé;
+# a 2ª exige corrida. Pilar estreito como na arte (~119 px).
+# ---------------------------------------------------------------------------
+TRAIL_ORIGIN_X = SCREEN_WIDTH
+TRAIL_ART_GROUND_Y = 264
+TRAIL_DRAW_Y = GROUND_Y - TRAIL_ART_GROUND_Y
+TRAIL_GROUND_Y = GROUND_Y
+TRAIL_A_X = TRAIL_ORIGIN_X + 0
+TRAIL_PLATFORM_A_WIDTH = 257
+TRAIL_B_X = TRAIL_ORIGIN_X + 404
+TRAIL_PLATFORM_B_WIDTH = 119
+TRAIL_C_X = TRAIL_ORIGIN_X + 709
+TRAIL_PLATFORM_C_WIDTH = 315
+TRAIL_GAP_1_WIDTH = TRAIL_B_X - (TRAIL_A_X + TRAIL_PLATFORM_A_WIDTH)
+TRAIL_GAP_2_WIDTH = TRAIL_C_X - (TRAIL_B_X + TRAIL_PLATFORM_B_WIDTH)
+TRAIL_LEDGE_HEIGHT = 170
+TRAIL_MID_LEDGE_HEIGHT = 80
+TRAIL_FALL_Y = TRAIL_GROUND_Y + 96
+TRAIL_FALL_DAMAGE = 22
+TRAIL_SPAWN_X = TRAIL_ORIGIN_X + 150
+TRAIL_WORLD_WIDTH = TRAIL_ORIGIN_X + SCREEN_WIDTH
+TRAIL_CHECKPOINT_X = TRAIL_ORIGIN_X + 190
+TRAIL_EXIT_X = TRAIL_C_X + 70
+TRAIL_PLATFORMS = (
+    (TRAIL_A_X, TRAIL_GROUND_Y, TRAIL_PLATFORM_A_WIDTH, TRAIL_LEDGE_HEIGHT),
+    (TRAIL_B_X, TRAIL_GROUND_Y, TRAIL_PLATFORM_B_WIDTH, TRAIL_MID_LEDGE_HEIGHT),
+    (TRAIL_C_X, TRAIL_GROUND_Y, TRAIL_PLATFORM_C_WIDTH, TRAIL_LEDGE_HEIGHT),
+)
+FOREST_CROSSING_PLATFORMS = PLATFORMS + TRAIL_PLATFORMS
+
+# Câmera da travessia: Yáguar fica ~40% da tela ao avançar, para ver o caminho.
+CAMERA_ANCHOR_FWD = 0.40
+CAMERA_ANCHOR_BACK = 0.58
+CAMERA_DEADZONE = 0.055
+CAMERA_LERP = 0.14
+CROSSING_BLEND_PX = 220
+CROSSING_OVERHANG_PX = 200
+FOREST_FAR_GROUND_SRC_Y = 820
 
 # ---------------------------------------------------------------------------
 # Cinemática da introdução (após o menu, antes da partida)

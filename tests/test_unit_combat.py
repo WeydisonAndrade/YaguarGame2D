@@ -10,11 +10,13 @@ import pytest
 from src.config import (
     BLOCK_DAMAGE_FACTOR,
     GROUND_Y,
+    ONCA_RUN_SPEED,
+    ONCA_WALK_SPEED,
     PLAYER_ATTACK_FRAMES,
     PLAYER_INVULN_FRAMES,
     PLAYER_WALK_SPEED,
 )
-from src.entities import AttackHitbox, HerbItem, TreeTrunk, YaguarPlayer
+from src.entities import AttackHitbox, HerbItem, TreeTrunk, YaguarPlayer, SpectralJaguar
 from tests.conftest import FakeKeys
 
 
@@ -134,3 +136,53 @@ def test_tronco_voa_na_direcao_do_alvo_e_some_fora_da_tela():
 def test_erva_nasce_com_os_pes_no_chao():
     herb = HerbItem(220, GROUND_Y)
     assert herb.rect.bottom == GROUND_Y
+
+
+def _mean_opaque_rgb(surf: pygame.Surface) -> tuple[float, float, float]:
+    buf = pygame.image.tostring(surf, "RGBA")
+    rs = gs = bs = n = 0
+    for i in range(0, len(buf), 4):
+        if buf[i + 3] > 80:
+            rs += buf[i]
+            gs += buf[i + 1]
+            bs += buf[i + 2]
+            n += 1
+    return rs / n, gs / n, bs / n
+
+
+def test_primeira_onca_e_pintada_e_mais_lenta():
+    pintada = SpectralJaguar(800, GROUND_Y, kind="normal")
+    espectral = SpectralJaguar(800, GROUND_Y, kind="espectral")
+
+    assert pintada.kind == "normal"
+    assert pintada.walk_speed < ONCA_WALK_SPEED
+    assert pintada.walk_speed < espectral.walk_speed
+    assert pintada.run_speed < ONCA_RUN_SPEED
+    assert pintada.run_speed < espectral.run_speed
+    assert pintada.recover_cooldown > espectral.recover_cooldown
+    assert pintada.strike_frames > espectral.strike_frames
+    assert pintada.attack_range < espectral.attack_range
+
+    gold = _mean_opaque_rgb(pintada.frames["idle"])
+    lava = _mean_opaque_rgb(espectral.frames["idle"])
+    assert gold[0] > 110
+    assert gold[1] > 70
+    assert gold[1] > gold[2]
+    assert gold[1] > lava[1]
+
+
+def test_segunda_onca_e_pantera_negra():
+    pantera = SpectralJaguar(800, GROUND_Y, kind="pantera")
+    pintada = SpectralJaguar(800, GROUND_Y, kind="normal")
+    espectral = SpectralJaguar(800, GROUND_Y, kind="espectral")
+
+    assert pantera.kind == "pantera"
+    black = _mean_opaque_rgb(pantera.frames["idle"])
+    gold = _mean_opaque_rgb(pintada.frames["idle"])
+    lava = _mean_opaque_rgb(espectral.frames["idle"])
+    lum_black = sum(black) / 3
+    lum_gold = sum(gold) / 3
+    assert lum_black < lum_gold
+    assert lum_black < 55
+    assert black[0] < lava[0]
+    assert black[0] < 55

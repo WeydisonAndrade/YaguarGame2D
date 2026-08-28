@@ -41,9 +41,14 @@ def pygame_session():
     pygame.quit()
 
 
-@pytest.fixture
-def keys_idle() -> FakeKeys:
-    return FakeKeys()
+@pytest.fixture(autouse=True)
+def reset_physics_world():
+    from src.config import PLATFORMS, SCREEN_WIDTH
+    from src.entities import set_physics_world
+
+    set_physics_world(PLATFORMS, SCREEN_WIDTH, allow_pits=False)
+    yield
+    set_physics_world(PLATFORMS, SCREEN_WIDTH, allow_pits=False)
 
 
 @pytest.fixture

@@ -9,6 +9,7 @@ from pathlib import Path
 import pygame
 
 from src.config import SCREEN_HEIGHT, SCREEN_WIDTH
+from src.trail_art import ensure_crossing_world, ensure_trail_art
 
 ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
 PARALLAX_DIR = ASSETS_DIR / "parallax"
@@ -81,6 +82,15 @@ class ParallaxBackground:
             self.scenes.append(fallback)
 
         self.index = 0
+        self.mode = "scene"
+        self.trail: pygame.Surface | None = None
+        self.crossing_world: pygame.Surface | None = None
+        trail_path = ensure_trail_art()
+        if trail_path.is_file():
+            self.trail = pygame.image.load(str(trail_path)).convert()
+        crossing_path = ensure_crossing_world()
+        if crossing_path.is_file():
+            self.crossing_world = pygame.image.load(str(crossing_path)).convert()
         self.time = 0.0
         self._veil = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
         self._veil.fill((32, 10, 40))
@@ -118,7 +128,32 @@ class ParallaxBackground:
 
     def use_scene(self, index: int) -> None:
         """0 = floresta das onças / menu; 1 = caminho do Mapinguari."""
+        self.mode = "scene"
         self.index = max(0, min(index, len(self.scenes) - 1))
+
+    def use_crossing(self) -> None:
+        """Arena e clareira no mesmo mundo: a câmera desliza pelo strip contínuo."""
+        self.mode = "crossing"
+        self.index = 0
+        if self.crossing_world is None and self.trail is None:
+            self.use_scene(0)
+
+    def _draw_continuous(
+        self,
+        screen: pygame.Surface,
+        focus: tuple[float, float],
+        camera_x: float,
+    ) -> None:
+        """Um único strip de mundo: screen_x = world_x - camera_x."""
+        cam = int(camera_x)
+        if self.crossing_world is not None:
+            screen.blit(self.crossing_world, (-cam, 0))
+        else:
+            surf = self._current()
+            ox, oy = self._offset(surf, PARALLAX_FACTOR, focus)
+            screen.blit(surf, (ox - cam, oy))
+        self._draw_godrays(screen)
+        self._draw_motes(screen)
 
     def update(self, dt: float = 1 / 60) -> None:
         """Move folhas e poeira com o vento; recicla o que sai da tela."""
@@ -162,8 +197,16 @@ class ParallaxBackground:
             y = 0
         return x, y
 
-    def draw_back(self, screen: pygame.Surface, focus: tuple[float, float]) -> None:
-        """Camada de fundo completa: pintura + raios + névoa + poeira + folhas."""
+    def draw_back(
+        self,
+        screen: pygame.Surface,
+        focus: tuple[float, float],
+        camera_x: float = 0,
+    ) -> None:
+        """Camada de fundo: com o caminho aberto, arena e clareira formam um mundo só."""
+        if self.mode == "crossing":
+            self._draw_continuous(screen, focus, camera_x)
+            return
         surf = self._current()
         screen.blit(surf, self._offset(surf, PARALLAX_FACTOR, focus))
         self._draw_godrays(screen)
@@ -217,7 +260,8 @@ class ParallaxBackground:
             screen.blit(stamp, stamp.get_rect(center=(int(leaf["x"]), int(leaf["y"]))))
 
     def draw_front(self, screen: pygame.Surface, focus: tuple[float, float]) -> None:
-        return
+        if self.mode == "crossing":
+            self._draw_leaves(screen)
 
     def draw_corrupt_veil(self, screen: pygame.Surface) -> None:
         """Multiplica um véu púrpura após a primeira onça (floresta corrompida)."""

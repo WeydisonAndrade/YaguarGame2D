@@ -33,18 +33,30 @@ from src.config import (
 from src.player_anim import load_player_frames
 
 
+_world_platforms = PLATFORMS
+_world_width = SCREEN_WIDTH
+_allow_pits = False
+
+
+def set_physics_world(platforms: tuple, width: int, allow_pits: bool = False) -> None:
+    """Troca a laje da arena pela clareira (fossos) ou devolve o chão contínuo."""
+    global _world_platforms, _world_width, _allow_pits
+    _world_platforms = platforms
+    _world_width = width
+    _allow_pits = allow_pits
+
+
 def platform_rects() -> list[pygame.Rect]:
-    """Converte a tupla PLATFORMS em retângulos de colisão."""
-    return [pygame.Rect(*box) for box in PLATFORMS]
+    """Converte as plataformas ativas em retângulos de colisão."""
+    return [pygame.Rect(*box) for box in _world_platforms]
 
 
 def apply_gravity_and_platforms(rect: pygame.Rect, vel_y: float, on_ground: bool) -> tuple[pygame.Rect, float, bool]:
-    """Aplica gravidade, pousa na laje e impede sair da tela."""
+    """Aplica gravidade, pousa na laje e limita o corpo ao mundo ativo."""
     vel_y += GRAVITY
     rect.y += int(vel_y)
     grounded = False
 
-    # Só testa o chão na descida, pelos pés, para não grudar o corpo na plataforma.
     if vel_y >= 0:
         feet = pygame.Rect(rect.x + 12, rect.bottom - 8, max(8, rect.width - 24), 10)
         for plat in platform_rects():
@@ -54,13 +66,94 @@ def apply_gravity_and_platforms(rect: pygame.Rect, vel_y: float, on_ground: bool
                 grounded = True
                 break
 
-    if rect.bottom > GROUND_Y + 1:
+    if not _allow_pits and rect.bottom > GROUND_Y + 1:
         rect.bottom = GROUND_Y + 1
         vel_y = 0
         grounded = True
 
-    rect.clamp_ip(pygame.Rect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT + 40))
+    if rect.left < 0:
+        rect.left = 0
+    if rect.right > _world_width:
+        rect.right = _world_width
+    # Na clareira as falésias ficam no meio da pintura: o salto (teto ~137 px)
+    # entra no dossel. Cortar o topo anularia o pulo sem mudar a física.
+    if not _allow_pits:
+        if rect.top < 0:
+            rect.top = 0
+            if vel_y < 0:
+                vel_y = 0
     return rect, vel_y, grounded
+
+
+def _recolor_onca_pintada(src: pygame.Surface) -> pygame.Surface:
+    """Converte o sprite espectral (carvão e brasa) para pelagem de onça-pintada."""
+    w, h = src.get_size()
+    buf = bytearray(pygame.image.tostring(src, "RGBA"))
+    n = len(buf)
+    i = 0
+    while i < n:
+        r, g, b, a = buf[i], buf[i + 1], buf[i + 2], buf[i + 3]
+        if a >= 10:
+            lum = 0.30 * r + 0.59 * g + 0.11 * b
+            tooth = min(r, g, b) > 150 and abs(r - g) < 45 and abs(g - b) < 45
+            eye = r > 140 and g < 90 and b < 90 and a > 180
+            ember = r > 88 and r > g + 8 and r > b + 15
+            if tooth:
+                pass
+            elif eye:
+                buf[i], buf[i + 1], buf[i + 2] = 236, 196, 48
+            elif ember:
+                if a < 165:
+                    buf[i], buf[i + 1], buf[i + 2] = 214, 164, 68
+                    buf[i + 3] = max(18, int(a * 0.26))
+                else:
+                    # Brasa vira roseta: centro quase preto, borda marrom.
+                    heat = max(0.0, min(1.0, (r - 90) / 140.0))
+                    buf[i] = int(18 + heat * 28)
+                    buf[i + 1] = int(10 + heat * 16)
+                    buf[i + 2] = int(6 + heat * 8)
+            else:
+                t = max(0.0, min(1.0, lum / 72.0))
+                buf[i] = int(138 + t * 96)
+                buf[i + 1] = int(86 + t * 92)
+                buf[i + 2] = int(32 + t * 52)
+        i += 4
+    return _surface_from_rgba(bytes(buf), (w, h))
+
+
+def _recolor_onca_pantera(src: pygame.Surface) -> pygame.Surface:
+    """Converte o sprite espectral (carvão e brasa) para pelagem negra de pantera."""
+    w, h = src.get_size()
+    buf = bytearray(pygame.image.tostring(src, "RGBA"))
+    n = len(buf)
+    i = 0
+    while i < n:
+        r, g, b, a = buf[i], buf[i + 1], buf[i + 2], buf[i + 3]
+        if a >= 10:
+            lum = 0.30 * r + 0.59 * g + 0.11 * b
+            eye = r > 180 and g < 55 and b < 60 and a > 200
+            if eye:
+                buf[i], buf[i + 1], buf[i + 2] = 232, 188, 42
+            elif a < 140:
+                buf[i], buf[i + 1], buf[i + 2] = 14, 12, 18
+                buf[i + 3] = max(6, int(a * 0.10))
+            else:
+                t = max(0.0, min(1.0, lum / 90.0))
+                if r > 80 and r > b + 8:
+                    t = min(t, 0.32)
+                buf[i] = int(6 + t * 40)
+                buf[i + 1] = int(6 + t * 36)
+                buf[i + 2] = int(10 + t * 48)
+        i += 4
+    return _surface_from_rgba(bytes(buf), (w, h))
+
+
+def _surface_from_rgba(data: bytes, size: tuple[int, int]) -> pygame.Surface:
+    if hasattr(pygame.image, "frombytes"):
+        out = pygame.image.frombytes(data, size, "RGBA")
+    else:
+        out = pygame.image.fromstring(data, size, "RGBA")
+    return out.convert_alpha()
 
 
 class GameObject(pygame.sprite.Sprite):
@@ -91,6 +184,9 @@ class YaguarPlayer(pygame.sprite.Sprite):
         self.facing = 1
         self.vel_y = 0
         self.on_ground = True
+        self.air_state = "grounded"
+        self.checkpoint = (x, y)
+        self.safe_feet = (x, y)
         self.crouching = False
         self.blocking = False
         self.attacking = False
@@ -172,6 +268,13 @@ class YaguarPlayer(pygame.sprite.Sprite):
             self.on_ground = False
 
         self.rect, self.vel_y, self.on_ground = apply_gravity_and_platforms(self.rect, self.vel_y, self.on_ground)
+        if self.on_ground:
+            self.air_state = "grounded"
+            self.safe_feet = (self.rect.centerx, self.rect.bottom)
+        elif self.vel_y < 0:
+            self.air_state = "jumping"
+        else:
+            self.air_state = "falling"
         self._try_spawn_strike()
 
         # Pose visual segundo a ação atual
@@ -331,15 +434,68 @@ class BaseEnemy(GameObject):
 
 
 class SpectralJaguar(BaseEnemy):
-    """Onça espectral — perseguição em galope, garras e mordidas."""
+    """Onça da onda — perseguição em galope, garras e mordidas."""
 
-    def __init__(self, x, y):
-        super().__init__(x, y, "assets/enemy_onca_spectral.png", health=140, speed=ONCA_WALK_SPEED, damage=8)
+    def __init__(self, x, y, kind: str = "espectral"):
+        kind = kind if kind in ("normal", "pantera", "espectral") else "espectral"
+        stats = {
+            "normal": (120, ONCA_WALK_SPEED, 7),
+            "pantera": (130, ONCA_WALK_SPEED + 0.8, 8),
+            "espectral": (140, ONCA_WALK_SPEED, 9),
+        }
+        health, speed, damage = stats[kind]
+        super().__init__(x, y, "assets/enemy_onca_spectral.png", health=health, speed=speed, damage=damage)
+        self.kind = kind
+        if kind == "normal":
+            self.walk_speed = 2.05
+            self.run_speed = 4.2
+            self.run_distance = 230
+            self.attack_range = 98
+            self.recover_cooldown = 46
+            self.strike_frames = 34
+            self.anim_run = 9
+            self.anim_walk = 15
+            self.bite_lunge = 8
+            self.charge_lunge = 8
+            self.claw_damage = 7
+            self.bite_damage = 10
+        elif kind == "pantera":
+            self.walk_speed = ONCA_WALK_SPEED + 0.8
+            self.run_speed = ONCA_RUN_SPEED + 0.6
+            self.run_distance = 110
+            self.attack_range = 130
+            self.recover_cooldown = 28
+            self.strike_frames = 26
+            self.anim_run = 5
+            self.anim_walk = 9
+            self.bite_lunge = 18
+            self.charge_lunge = 20
+            self.claw_damage = 9
+            self.bite_damage = 12
+        else:
+            self.walk_speed = ONCA_WALK_SPEED
+            self.run_speed = ONCA_RUN_SPEED
+            self.run_distance = ONCA_RUN_DISTANCE
+            self.attack_range = 130
+            self.recover_cooldown = 28
+            self.strike_frames = 26
+            self.anim_run = 5
+            self.anim_walk = 9
+            self.bite_lunge = 18
+            self.charge_lunge = 20
+            self.claw_damage = 9
+            self.bite_damage = 12
+        self.speed = self.walk_speed
         self.frames = {}
         for name in ("idle", "claw", "bite"):
             raw = pygame.image.load(f"assets/onca/{name}.png").convert_alpha()
             size = (max(1, int(raw.get_width() * ONCA_SCALE)), max(1, int(raw.get_height() * ONCA_SCALE)))
-            self.frames[name] = pygame.transform.smoothscale(raw, size)
+            frame = pygame.transform.smoothscale(raw, size)
+            if kind == "normal":
+                frame = _recolor_onca_pintada(frame)
+            elif kind == "pantera":
+                frame = _recolor_onca_pantera(frame)
+            self.frames[name] = frame
         # Dois frames de corrida derivados do idle e da mordida
         idle = self.frames["idle"]
         bite = self.frames["bite"]
@@ -358,7 +514,7 @@ class SpectralJaguar(BaseEnemy):
         self.next_attack = "claw"
         self.pending_melee = None
         self.melee_spawned = False
-        self.pending_damage = 8
+        self.pending_damage = self.claw_damage
         self.anim_tick = 0
         self.run_frame = 0
         self.running = False
@@ -396,13 +552,13 @@ class SpectralJaguar(BaseEnemy):
                 hx = self.hurtbox.right - 8 if self.facing > 0 else self.hurtbox.left - reach + 8
                 hy = player_pos[1] - 24
                 self.pending_melee = pygame.Rect(hx, hy, reach, 50)
-                self.pending_damage = 9 if self.action == "claw" else 12
+                self.pending_damage = self.claw_damage if self.action == "claw" else self.bite_damage
                 self.melee_spawned = True
                 if self.action == "bite":
-                    self.rect.x += self.facing * 18
+                    self.rect.x += self.facing * self.bite_lunge
             if self.action_timer <= 0:
                 self.action = "idle"
-                self.cooldown = 28
+                self.cooldown = self.recover_cooldown
             self.rect, self.vel_y, self.on_ground = apply_gravity_and_platforms(self.rect, self.vel_y, self.on_ground)
             return
 
@@ -410,26 +566,26 @@ class SpectralJaguar(BaseEnemy):
             self.cooldown -= 1
 
         # Perto o bastante: alterna garra e mordida
-        if self.stun <= 0 and self.cooldown <= 0 and dist < 130:
+        if self.stun <= 0 and self.cooldown <= 0 and dist < self.attack_range:
             self.action = self.next_attack
             self.next_attack = "bite" if self.next_attack == "claw" else "claw"
-            self.action_timer = 26
+            self.action_timer = self.strike_frames
             self.melee_spawned = False
             if self.running:
-                self.rect.x += self.facing * 20
+                self.rect.x += self.facing * self.charge_lunge
             self._set_pose("claw" if self.action == "claw" else "bite")
             self.rect, self.vel_y, self.on_ground = apply_gravity_and_platforms(self.rect, self.vel_y, self.on_ground)
             return
 
         # Longe: galope; médio: caminhada
-        self.running = self.stun <= 0 and dist > ONCA_RUN_DISTANCE
+        self.running = self.stun <= 0 and dist > self.run_distance
         approaching = self.stun <= 0 and dist > 70
-        self.speed = ONCA_RUN_SPEED if self.running else ONCA_WALK_SPEED
+        self.speed = self.run_speed if self.running else self.walk_speed
         self.move_towards(player_pos)
 
         if approaching:
             self.anim_tick += 1
-            cadence = 5 if self.running else 9
+            cadence = self.anim_run if self.running else self.anim_walk
             if self.anim_tick % cadence == 0:
                 self.run_frame = 1 - self.run_frame
             self._set_pose("run1" if self.run_frame == 0 else "run2")

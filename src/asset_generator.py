@@ -603,6 +603,8 @@ def generate_assets() -> dict[str, pygame.Surface]:
         sprite = builder()
         _save(sprite, filename)
         loaded[filename] = _to_pygame(sprite)
+    from src.trail_art import ensure_trail_art
+    ensure_trail_art(force=True)
     return loaded
 
 

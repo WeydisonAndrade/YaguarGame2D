@@ -10,11 +10,27 @@ import pygame
 import random
 from src import audio
 from src.config import (SCREEN_WIDTH, SCREEN_HEIGHT, COLOR_TEXT, COLOR_GOLD,
-                        COLOR_RED, COLOR_SCARLET, TOTAL_HERBS_TO_COLLECT, GROUND_Y, ONCA_WAVE_TOTAL)
+                        COLOR_RED, COLOR_SCARLET, TOTAL_HERBS_TO_COLLECT, GROUND_Y,
+                        ONCA_WAVE_TOTAL, ONCA_WAVE_KINDS, TRAIL_EXIT_X, TRAIL_FALL_DAMAGE,
+                        TRAIL_FALL_Y, FOREST_CROSSING_PLATFORMS, TRAIL_ORIGIN_X,
+                        TRAIL_WORLD_WIDTH, CAMERA_ANCHOR_FWD, CAMERA_ANCHOR_BACK,
+                        CAMERA_DEADZONE, CAMERA_LERP)
 from src.entities import YaguarPlayer, SpectralJaguar, MapinguariBoss, HerbItem
 from src.fx import blit_flashed
 from src.ui import PauseOverlay, RitualHUD, RitualMenu, SynopsisPlate
 from src.cinematic import CinematicSequence
+
+_ONCA_ZONE_NAMES = {
+    "normal": "Onça-pintada",
+    "pantera": "Pantera",
+    "espectral": "Onça Espectral",
+}
+
+
+def _onca_zone_label(wave_index: int) -> str:
+    kind = ONCA_WAVE_KINDS[min(wave_index, len(ONCA_WAVE_KINDS) - 1)]
+    nome = _ONCA_ZONE_NAMES.get(kind, "Onça")
+    return f"Floresta — {nome} {wave_index + 1}/{ONCA_WAVE_TOTAL}"
 
 
 def _separate(player, enemy) -> None:
@@ -33,6 +49,68 @@ def _defeat_player(game) -> bool:
         game.change_state(GameOverState())
         return True
     return False
+
+
+def _respawn_from_fall(game) -> None:
+    """Devolve Yáguar ao checkpoint da falésia após cair na fenda."""
+    feet = getattr(game.player, "checkpoint", None) or (TRAIL_ORIGIN_X + 80, GROUND_Y)
+    game.player.health = max(0.0, game.player.health - TRAIL_FALL_DAMAGE)
+    game.player.rect.midbottom = (int(feet[0]), int(feet[1]))
+    game.player.vel_y = 0
+    game.player.on_ground = True
+    game.player.air_state = "grounded"
+    game.player.invuln = 26
+    game.camera_x = max(0, min(TRAIL_WORLD_WIDTH - SCREEN_WIDTH, game.player.rect.centerx - SCREEN_WIDTH // 2))
+    game.fx.player_hurt(game.player.hurtbox.centerx, game.player.hurtbox.centery, TRAIL_FALL_DAMAGE, False)
+
+
+def _follow_camera(game) -> None:
+    """Câmera lateral com look-ahead: o guerreiro fica ~40% da tela ao avançar."""
+    facing = getattr(game.player, "facing", 1)
+    anchor = CAMERA_ANCHOR_FWD if facing >= 0 else CAMERA_ANCHOR_BACK
+    max_cam = max(0, TRAIL_WORLD_WIDTH - SCREEN_WIDTH)
+    cur = float(getattr(game, "camera_x", 0))
+    screen_x = game.player.rect.centerx - cur
+    ratio = screen_x / SCREEN_WIDTH if SCREEN_WIDTH else 0.5
+    lo, hi = anchor - CAMERA_DEADZONE, anchor + CAMERA_DEADZONE
+    if lo <= ratio <= hi and 0 < cur < max_cam:
+        return
+    target = game.player.rect.centerx - SCREEN_WIDTH * anchor
+    target = max(0.0, min(float(max_cam), float(target)))
+    game.camera_x = cur + (target - cur) * CAMERA_LERP
+
+
+def _update_trail_checkpoint(player) -> None:
+    if not player.on_ground:
+        return
+    for x, y, w, _h in FOREST_CROSSING_PLATFORMS:
+        inset = 16 if w < 160 else 40
+        left, right = x + inset, x + w - inset
+        if left <= player.rect.centerx <= right:
+            player.checkpoint = (int(max(left, min(right, player.rect.centerx))), y)
+            return
+
+
+def _draw_fendas_debug(game, screen) -> None:
+    """F3: colliders, câmera, world x e origem visual da clareira."""
+    cam = int(getattr(game, "camera_x", 0))
+    ox, oy = game.fx.ox - cam, game.fx.oy
+    font = pygame.font.SysFont("consolas", 14)
+    for box in FOREST_CROSSING_PLATFORMS:
+        pygame.draw.rect(screen, (80, 220, 255), pygame.Rect(*box).move(ox, oy), 2)
+    pygame.draw.line(screen, (220, 50, 50), (0, TRAIL_FALL_Y), (SCREEN_WIDTH, TRAIL_FALL_Y), 1)
+    seam = TRAIL_ORIGIN_X - cam
+    if 0 <= seam <= SCREEN_WIDTH:
+        pygame.draw.line(screen, (255, 180, 40), (seam, 0), (seam, SCREEN_HEIGHT), 1)
+    ck = game.player.checkpoint
+    pygame.draw.circle(screen, (255, 220, 80), (int(ck[0] + ox), int(ck[1] - 8 + oy)), 6, 2)
+    lines = (
+        f"world_x={game.player.rect.centerx}  cam={cam}  feet={game.player.rect.bottom}",
+        f"vel_y={game.player.vel_y:.1f}  {game.player.air_state}  ground_y={GROUND_Y}",
+        f"screen_x={game.player.rect.centerx - cam}  F3 debug",
+    )
+    for i, text in enumerate(lines):
+        screen.blit(font.render(text, True, (245, 240, 210)), (16, SCREEN_HEIGHT - 72 + i * 16))
 
 
 class GameState:
@@ -145,12 +223,16 @@ class PlayingState(GameState):
         # play_fight() carrega a trilha de combate e encerra o epic_music da cinemática.
         audio.play_fight()
         audio.play_onca_roar()
-        self.current_zone = f"Floresta — Onça Espectral 1/{ONCA_WAVE_TOTAL}"
+        self.current_zone = _onca_zone_label(0)
         self.hud = RitualHUD()
 
     def handle_events(self, game, event):
         if event.type == pygame.KEYDOWN and event.key in (pygame.K_ESCAPE, pygame.K_p):
             game.change_state(PauseState(self))
+            return
+
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_F3:
+            game.debug_draw = not getattr(game, "debug_draw", False)
             return
 
         if event.type == pygame.MOUSEBUTTONDOWN:
@@ -230,14 +312,14 @@ class PlayingState(GameState):
                         if isinstance(enemy, SpectralJaguar):
                             game.jaguars_defeated += 1
                             if game.jaguars_defeated < ONCA_WAVE_TOTAL:
-                                proxima = game.jaguars_defeated + 1
-                                self.current_zone = f"Floresta — Onça Espectral {proxima}/{ONCA_WAVE_TOTAL}"
+                                self.current_zone = _onca_zone_label(game.jaguars_defeated)
                                 game.spawn_spectral_jaguar()
                             else:
                                 game.player.has_garra_espiritual = True
-                                game.zone_stage = 2
-                                self.current_zone = "Caminho da Montanha Sagrada"
-                                game.change_state(BossCinematicState(self))
+                                enemy.kill()
+                                game.begin_forest_crossing()
+                                self.current_zone = "Floresta — o caminho se abre"
+                                return
                         elif isinstance(enemy, MapinguariBoss):
                             game.change_state(VictoryCinematicState())
                         enemy.kill()
@@ -262,8 +344,27 @@ class PlayingState(GameState):
                 if _defeat_player(game):
                     return
 
-        if game.zone_stage == 0 and len(game.enemies) == 0:
-            game.zone_stage = 1
+        if game.zone_stage == 0 and game.jaguars_defeated >= ONCA_WAVE_TOTAL and len(game.enemies) == 0:
+            game.player.has_garra_espiritual = True
+            game.begin_forest_crossing()
+            self.current_zone = "Floresta — o caminho se abre"
+
+        if game.zone_stage == 1:
+            _follow_camera(game)
+            if game.player.rect.centerx >= TRAIL_ORIGIN_X:
+                self.current_zone = "Clareira — pule sobre as fendas"
+            else:
+                self.current_zone = "Floresta — o caminho se abre"
+            _update_trail_checkpoint(game.player)
+            if not game.player.on_ground and game.player.rect.bottom > TRAIL_FALL_Y:
+                _respawn_from_fall(game)
+                if _defeat_player(game):
+                    return
+            if game.player.rect.centerx >= TRAIL_EXIT_X:
+                game.zone_stage = 2
+                self.current_zone = "Caminho da Montanha Sagrada"
+                game.change_state(BossCinematicState(self))
+                return
 
         game.fx.tick_flashes(game.all_sprites)
         game.fx.tick_spear_magic(game.player)
@@ -272,16 +373,16 @@ class PlayingState(GameState):
         self.hud.update(game)
 
     def draw(self, game, screen):
-        focus = (game.player.rect.centerx, GROUND_Y - 90)
-        game.parallax.draw_back(screen, focus)
-        if game.zone_stage > 0:
+        cam = int(getattr(game, "camera_x", 0))
+        focus = (game.player.rect.centerx - cam, GROUND_Y - 90)
+        game.parallax.draw_back(screen, focus, cam)
+        if game.zone_stage >= 2:
             game.parallax.draw_corrupt_veil(screen)
 
-        ox, oy = game.fx.ox, game.fx.oy
+        ox, oy = game.fx.ox - cam, game.fx.oy
         for herb in game.herbs:
             screen.blit(herb.image, herb.rect.move(ox, oy))
         for spr in game.all_sprites:
-            # Pisca o jogador nos i-frames, a menos que esteja no flash de hit
             if (
                 spr is game.player
                 and game.player.invuln > 0
@@ -291,13 +392,16 @@ class PlayingState(GameState):
             ):
                 continue
             blit_flashed(screen, spr, (ox, oy))
-        game.fx.draw_spear_magic(screen, game.player)
+        game.fx.draw_spear_magic(screen, game.player, cam)
         for proj in game.projectiles:
             screen.blit(proj.image, proj.rect.move(ox, oy))
 
-        game.fx.draw_world(screen)
+        game.fx.draw_world(screen, cam)
         game.fx.draw_veils(screen)
+        game.parallax.draw_front(screen, focus)
         self.hud.draw(game, screen, self.current_zone)
+        if getattr(game, "debug_draw", False) and game.zone_stage == 1:
+            _draw_fendas_debug(game, screen)
 
 
 class PauseState(GameState):

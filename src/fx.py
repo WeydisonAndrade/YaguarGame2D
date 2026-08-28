@@ -262,8 +262,10 @@ class CombatFX:
                 alive_m.append(mote)
         self.motes = alive_m
 
-    def draw_world(self, screen: pygame.Surface) -> None:
+    def draw_world(self, screen: pygame.Surface, camera_x: float = 0) -> None:
         """Desenha cortes, faíscas e popups no espaço do mundo (com shake)."""
+        ox = self.ox - camera_x
+        oy = self.oy
         for s in self.slashes:
             t = s["life"] / s["max"]
             w = int(28 + 70 * (1 - t * 0.35))
@@ -281,7 +283,7 @@ class CombatFX:
             pygame.draw.ellipse(surf, col, (0, 4, w, h + 4))
             pygame.draw.ellipse(surf, core, (int(w * 0.18), 6, int(w * 0.55), max(3, h - 2)))
             rot = pygame.transform.rotate(surf, s["angle"])
-            screen.blit(rot, rot.get_rect(center=(int(s["x"] + self.ox), int(s["y"] + self.oy))))
+            screen.blit(rot, rot.get_rect(center=(int(s["x"] + ox), int(s["y"] + oy))))
 
         for p in self.particles:
             t = p["life"] / p["max"]
@@ -289,7 +291,7 @@ class CombatFX:
             r = max(1, int(p["size"] * (0.45 + t)))
             blob = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
             pygame.draw.circle(blob, (*p["color"], alpha), (r, r), r)
-            screen.blit(blob, (int(p["x"] + self.ox - r), int(p["y"] + self.oy - r)))
+            screen.blit(blob, (int(p["x"] + ox - r), int(p["y"] + oy - r)))
 
         for ring in self.rings:
             t = ring["life"] / ring["max"]
@@ -299,32 +301,32 @@ class CombatFX:
             cx = radius + 4
             pygame.draw.circle(surf, (255, 230, 140, alpha), (cx, cx), radius, 2)
             pygame.draw.circle(surf, (170, 255, 210, int(alpha * 0.6)), (cx, cx), max(2, radius - 5), 1)
-            screen.blit(surf, (int(ring["x"] + self.ox - cx), int(ring["y"] + self.oy - cx)))
+            screen.blit(surf, (int(ring["x"] + ox - cx), int(ring["y"] + oy - cx)))
 
         for mote in self.motes:
             t = mote["life"] / mote["max"]
             r = max(1, int(mote["size"] * (0.4 + t)))
             blob = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
             pygame.draw.circle(blob, (*mote["color"], int(255 * t)), (r, r), r)
-            screen.blit(blob, (int(mote["x"] + self.ox - r), int(mote["y"] + self.oy - r)))
+            screen.blit(blob, (int(mote["x"] + ox - r), int(mote["y"] + oy - r)))
 
         font = self._popup_font()
         for n in self.popups:
             t = n["life"] / n["max"]
             label = font.render(n["text"], True, n["color"])
             label.set_alpha(int(255 * min(1.0, t * 1.4)))
-            rect = label.get_rect(center=(int(n["x"] + self.ox), int(n["y"] + self.oy)))
+            rect = label.get_rect(center=(int(n["x"] + ox), int(n["y"] + oy)))
             screen.blit(label, rect)
 
-    def draw_spear_magic(self, screen: pygame.Surface, player) -> None:
+    def draw_spear_magic(self, screen: pygame.Surface, player, camera_x: float = 0) -> None:
         """Brilho no cabo e na ponta da lança enquanto o encantamento estiver ativo."""
         if getattr(player, "spear_magic", 0) <= 0:
             return
         t = min(1.0, player.spear_magic / 56)
         pulse = 0.65 + 0.35 * math.sin(pygame.time.get_ticks() / 90.0)
         hand, tip = player.spear_axis()
-        hx, hy = hand[0] + self.ox, hand[1] + self.oy
-        tx, ty = tip[0] + self.ox, tip[1] + self.oy
+        hx, hy = hand[0] + self.ox - camera_x, hand[1] + self.oy
+        tx, ty = tip[0] + self.ox - camera_x, tip[1] + self.oy
         dx, dy = tx - hx, ty - hy
         length = max(8, int(math.hypot(dx, dy)))
         angle = -math.degrees(math.atan2(dy, dx))

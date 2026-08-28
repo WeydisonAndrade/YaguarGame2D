@@ -9,8 +9,24 @@ import random
 
 import pygame
 from src import audio
-from src.config import SCREEN_WIDTH, SCREEN_HEIGHT, FPS, TOTAL_HERBS_TO_COLLECT, GROUND_Y
-from src.entities import YaguarPlayer, SpectralJaguar, MapinguariBoss, HerbItem
+from src.config import (
+    SCREEN_WIDTH,
+    SCREEN_HEIGHT,
+    FPS,
+    TOTAL_HERBS_TO_COLLECT,
+    FOREST_CROSSING_PLATFORMS,
+    GROUND_Y,
+    ONCA_WAVE_KINDS,
+    PLATFORMS,
+    TRAIL_WORLD_WIDTH,
+)
+from src.entities import (
+    YaguarPlayer,
+    SpectralJaguar,
+    MapinguariBoss,
+    HerbItem,
+    set_physics_world,
+)
 from src.fx import CombatFX
 from src.game_states import MenuState
 from src.parallax import ParallaxBackground
@@ -28,14 +44,16 @@ class Game:
         self.running = True
         self.parallax = ParallaxBackground()
         self.fx = CombatFX()
+        self.debug_draw = False
 
-        # Começa no menu ritual; o nível já é montado para a primeira partida.
         self.state = MenuState()
         self.reset_level()
 
     def reset_level(self):
         """Recria jogador, onça inicial e ervas — usado na intro e ao recomeçar."""
-        self.zone_stage = 0  # 0: onças, 2: Mapinguari
+        set_physics_world(PLATFORMS, SCREEN_WIDTH, allow_pits=False)
+        self.zone_stage = 0
+        self.camera_x = 0
         self.herbs_collected = 0
         self.jaguars_defeated = 0
 
@@ -58,15 +76,34 @@ class Game:
             self.herbs.add(h)
 
     def spawn_spectral_jaguar(self, roar: bool = True) -> None:
-        """Coloca a próxima onça espectral à direita da tela."""
-        jaguar = SpectralJaguar(SCREEN_WIDTH - 200, GROUND_Y)
+        """Coloca a próxima onça da onda (normal, pantera ou espectral) à direita."""
+        idx = min(self.jaguars_defeated, len(ONCA_WAVE_KINDS) - 1)
+        kind = ONCA_WAVE_KINDS[idx]
+        jaguar = SpectralJaguar(SCREEN_WIDTH - 200, GROUND_Y, kind=kind)
         self.enemies.add(jaguar)
         self.all_sprites.add(jaguar)
         if roar:
             audio.play_onca_roar()
 
+    def begin_forest_crossing(self) -> None:
+        """Abre o caminho à direita: a clareira continua a mesma floresta."""
+        if self.zone_stage == 1:
+            return
+        self.zone_stage = 1
+        set_physics_world(FOREST_CROSSING_PLATFORMS, TRAIL_WORLD_WIDTH, allow_pits=True)
+        self.parallax.use_crossing()
+        self.player.checkpoint = (int(self.player.rect.centerx), GROUND_Y)
+        self.player.safe_feet = (int(self.player.rect.centerx), GROUND_Y)
+
     def spawn_mapinguari(self):
         """Troca o cenário, instancia o chefe e inicia o tema da batalha."""
+        set_physics_world(PLATFORMS, SCREEN_WIDTH, allow_pits=False)
+        self.camera_x = 0
+        self.zone_stage = 2
+        self.player.rect.midbottom = (180, GROUND_Y)
+        self.player.vel_y = 0
+        self.player.on_ground = True
+        self.player.air_state = "grounded"
         self.parallax.use_scene(1)
         boss = MapinguariBoss(SCREEN_WIDTH - 220, GROUND_Y)
         self.enemies.add(boss)
@@ -74,11 +111,9 @@ class Game:
         audio.play_mapinguari()
 
     def change_state(self, new_state):
-        """Substitui a tela ativa (menu, partida, pausa, etc.)."""
         self.state = new_state
 
     def run(self):
-        """Loop clássico: eventos → update (ou hitstop) → draw → flip."""
         while self.running:
             self.clock.tick(FPS)
 
@@ -87,7 +122,6 @@ class Game:
                     self.running = False
                 self.state.handle_events(self, event)
 
-            # Hitstop congela a lógica por alguns frames no impacto, mas o draw segue.
             if getattr(self, "fx", None) and self.fx.hitstop > 0:
                 self.fx.hitstop -= 1
             else:

@@ -5,7 +5,17 @@ from __future__ import annotations
 import pygame
 import pytest
 
-from src.config import GROUND_Y, ONCA_WAVE_TOTAL, TOTAL_HERBS_TO_COLLECT
+from src.config import (
+    GROUND_Y,
+    ONCA_WAVE_TOTAL,
+    SCREEN_WIDTH,
+    TOTAL_HERBS_TO_COLLECT,
+    TRAIL_CHECKPOINT_X,
+    TRAIL_EXIT_X,
+    TRAIL_FALL_DAMAGE,
+    TRAIL_GROUND_Y,
+    TRAIL_ORIGIN_X,
+)
 from src.entities import AttackHitbox, MapinguariBoss, SpectralJaguar
 from src.game_states import GameOverState, PlayingState, VictoryCinematicState
 from tests.conftest import FakeKeys
@@ -20,6 +30,7 @@ def test_golpe_da_lanca_derrota_a_onca_e_spawna_a_proxima(game, monkeypatch):
     _idle_keys(monkeypatch)
     first = next(iter(game.enemies))
     assert isinstance(first, SpectralJaguar)
+    assert first.kind == "normal"
     hb = AttackHitbox(first.hurtbox.x, first.hurtbox.y, 220, 180, 999)
     game.attack_hitboxes.add(hb)
 
@@ -29,10 +40,12 @@ def test_golpe_da_lanca_derrota_a_onca_e_spawna_a_proxima(game, monkeypatch):
     assert game.jaguars_defeated == 1
     assert len(game.enemies) == 1
     assert isinstance(next(iter(game.enemies)), SpectralJaguar)
+    assert next(iter(game.enemies)).kind == "pantera"
     assert "2/3" in game.state.current_zone
+    assert "Pantera" in game.state.current_zone
 
 
-def test_terceira_onca_abre_a_cinematica_do_mapinguari(game, monkeypatch):
+def test_terceira_onca_abre_a_clareira_e_depois_o_mapinguari(game, monkeypatch):
     _idle_keys(monkeypatch)
     from src.game_states import BossCinematicState
 
@@ -44,14 +57,74 @@ def test_terceira_onca_abre_a_cinematica_do_mapinguari(game, monkeypatch):
 
     assert game.jaguars_defeated == ONCA_WAVE_TOTAL
     assert game.player.has_garra_espiritual is True
-    assert game.zone_stage == 2
+    assert isinstance(game.state, PlayingState)
+    assert game.zone_stage == 1
+    assert game.parallax.mode == "crossing"
+    assert game.player.rect.bottom in (GROUND_Y, GROUND_Y + 1)
+
+    game.player.rect.midbottom = (TRAIL_EXIT_X, TRAIL_GROUND_Y)
+    game.player.on_ground = True
+    game.state.update(game)
     assert isinstance(game.state, BossCinematicState)
-    assert not any(isinstance(e, MapinguariBoss) for e in game.enemies)
 
     game.state.handle_events(game, pygame.event.Event(pygame.KEYDOWN, key=pygame.K_SPACE))
     assert isinstance(game.state, PlayingState)
     bosses = [e for e in game.enemies if isinstance(e, MapinguariBoss)]
     assert len(bosses) == 1
+    assert game.player.rect.centerx < SCREEN_WIDTH
+
+
+def test_queda_na_clareira_fere_e_devolve_ao_checkpoint(game, monkeypatch):
+    _idle_keys(monkeypatch)
+    game.begin_forest_crossing()
+    start = game.player.health
+    game.player.checkpoint = (TRAIL_CHECKPOINT_X, TRAIL_GROUND_Y)
+    game.player.rect.midbottom = (TRAIL_ORIGIN_X + 330, TRAIL_GROUND_Y + 40)
+    game.player.vel_y = 12
+    game.player.on_ground = False
+
+    for _ in range(90):
+        if not isinstance(game.state, PlayingState):
+            break
+        game.state.update(game)
+        if game.player.health < start:
+            break
+
+    assert isinstance(game.state, PlayingState)
+    assert game.player.health == start - TRAIL_FALL_DAMAGE
+    assert game.player.rect.centerx == TRAIL_CHECKPOINT_X
+    assert game.player.on_ground is True
+
+
+def test_caminho_aberto_permite_voltar_a_arena(game, monkeypatch):
+    """Com o caminho aberto, andar à esquerda devolve Yáguar à arena das onças."""
+    _idle_keys(monkeypatch)
+    game.begin_forest_crossing()
+    game.player.rect.midbottom = (200, GROUND_Y)
+    game.player.on_ground = True
+    game.player.vel_y = 0
+    game.state.update(game)
+    assert isinstance(game.state, PlayingState)
+    assert game.zone_stage == 1
+    assert game.player.on_ground is True
+    assert game.player.rect.centerx < TRAIL_ORIGIN_X
+    assert game.player.rect.bottom in (GROUND_Y, GROUND_Y + 1)
+
+
+def test_camera_deixa_o_caminho_a_frente_visivel(game, monkeypatch):
+    """Ao avançar, Yáguar fica à esquerda do centro para a clareira aparecer primeiro."""
+    _idle_keys(monkeypatch)
+    game.begin_forest_crossing()
+    game.player.rect.midbottom = (1200, GROUND_Y)
+    game.player.facing = 1
+    game.player.on_ground = True
+    game.player.vel_y = 0
+    game.camera_x = 0
+    for _ in range(45):
+        game.state.update(game)
+    screen_x = game.player.rect.centerx - game.camera_x
+    assert 0.32 * SCREEN_WIDTH < screen_x < 0.50 * SCREEN_WIDTH
+    assert game.camera_x > 0
 
 
 def test_derrotar_o_mapinguari_vai_para_vitoria(game, monkeypatch):

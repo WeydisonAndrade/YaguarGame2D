@@ -19,6 +19,7 @@ from src.config import (
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
     TOTAL_HERBS_TO_COLLECT,
+    TRAIL_ORIGIN_X,
 )
 
 _TITLE_FONTS = (
@@ -461,11 +462,13 @@ class RitualHUD:
         """Placa do jogador, nome da zona e barras de vida dos inimigos."""
         self._draw_player_plate(game, screen)
         self._draw_chrome(screen, zone)
+        self._draw_challenge(game, screen)
         self._draw_enemy_bars(game, screen)
 
     def _draw_player_plate(self, game, screen: pygame.Surface) -> None:
         player = game.player
         plate = pygame.Rect(16, 14, 368, 118)
+        bar_w = 336
         body = pygame.Surface(plate.size, pygame.SRCALPHA)
         pygame.draw.rect(body, (*COLOR_BARK, 200), body.get_rect(), border_radius=8)
         screen.blit(body, plate.topleft)
@@ -489,7 +492,7 @@ class RitualHUD:
             screen,
             plate.x + 16,
             plate.y + 34,
-            336,
+            bar_w,
             16,
             player.health / player.max_health,
             self.hp_ghost / player.max_health,
@@ -504,7 +507,7 @@ class RitualHUD:
             screen,
             plate.x + 16,
             plate.y + 70,
-            336,
+            bar_w,
             10,
             player.stamina / player.max_stamina,
             self.stm_ghost / player.max_stamina,
@@ -572,14 +575,32 @@ class RitualHUD:
             pygame.draw.circle(screen, color, (x - 10, y + 10), 4)
 
     def _draw_chrome(self, screen: pygame.Surface, zone: str) -> None:
+        hint = self.font_hint.render("ESC  pausar", True, COLOR_PARCHMENT)
         banner = self.font_zone.render(zone, True, COLOR_GOLD_LEAF)
         screen.blit(banner, (32, 136))
-        hint = self.font_hint.render("ESC  pausar", True, COLOR_PARCHMENT)
         screen.blit(hint, (SCREEN_WIDTH - hint.get_width() - 18, 18))
+
+    def _draw_challenge(self, game, screen: pygame.Surface) -> None:
+        on_clareira = (
+            getattr(game, "zone_stage", 0) == 1
+            and game.player.rect.centerx >= TRAIL_ORIGIN_X
+        )
+        if not on_clareira:
+            return
+        plate = pygame.Rect(SCREEN_WIDTH - 378, 42, 360, 52)
+        body = pygame.Surface(plate.size, pygame.SRCALPHA)
+        pygame.draw.rect(body, (*COLOR_BARK, 210), body.get_rect(), border_radius=8)
+        screen.blit(body, plate.topleft)
+        pygame.draw.rect(screen, COLOR_GOLD_SHADOW, plate, 2, border_radius=8)
+        pygame.draw.rect(screen, COLOR_GOLD_LEAF, plate.inflate(-6, -6), 1, border_radius=6)
+        title = self.font_label.render("DESAFIO", True, COLOR_MOSS)
+        screen.blit(title, (plate.x + 14, plate.y + 8))
+        line = self.font_hint.render("Pule sobre as fendas para continuar.", True, COLOR_PARCHMENT)
+        screen.blit(line, (plate.x + 14, plate.y + 28))
 
     def _draw_enemy_bars(self, game, screen: pygame.Surface) -> None:
         """Barras sem nome, ancoradas acima da hurtbox de cada inimigo."""
-        ox, oy = game.fx.ox, game.fx.oy
+        ox, oy = game.fx.ox - int(getattr(game, "camera_x", 0)), game.fx.oy
         for enemy in game.enemies:
             max_hp = max(1, getattr(enemy, "max_health", enemy.health))
             ratio = max(0.0, min(1.0, enemy.health / max_hp))
