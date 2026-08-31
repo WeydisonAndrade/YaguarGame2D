@@ -15,6 +15,7 @@ from src.config import (
     TRAIL_FALL_DAMAGE,
     TRAIL_GROUND_Y,
     TRAIL_ORIGIN_X,
+    MAPINGUARI_GATE_X,
 )
 from src.entities import AttackHitbox, MapinguariBoss, SpectralJaguar
 from src.game_states import GameOverState, PlayingState, VictoryCinematicState
@@ -42,7 +43,7 @@ def test_golpe_da_lanca_derrota_a_onca_e_spawna_a_proxima(game, monkeypatch):
     assert isinstance(next(iter(game.enemies)), SpectralJaguar)
     assert next(iter(game.enemies)).kind == "pantera"
     assert "2/3" in game.state.current_zone
-    assert "Pantera" in game.state.current_zone
+    assert "Espectral" in game.state.current_zone
 
 
 def test_terceira_onca_abre_a_clareira_e_depois_o_mapinguari(game, monkeypatch):
@@ -65,6 +66,12 @@ def test_terceira_onca_abre_a_clareira_e_depois_o_mapinguari(game, monkeypatch):
     game.player.rect.midbottom = (TRAIL_EXIT_X, TRAIL_GROUND_Y)
     game.player.on_ground = True
     game.state.update(game)
+    assert isinstance(game.state, PlayingState)
+    assert game.zone_stage == 1
+
+    game.player.rect.midbottom = (MAPINGUARI_GATE_X, TRAIL_GROUND_Y)
+    game.player.on_ground = True
+    game.state.update(game)
     assert isinstance(game.state, BossCinematicState)
 
     game.state.handle_events(game, pygame.event.Event(pygame.KEYDOWN, key=pygame.K_SPACE))
@@ -72,6 +79,9 @@ def test_terceira_onca_abre_a_clareira_e_depois_o_mapinguari(game, monkeypatch):
     bosses = [e for e in game.enemies if isinstance(e, MapinguariBoss)]
     assert len(bosses) == 1
     assert game.player.rect.centerx < SCREEN_WIDTH
+    assert game.parallax.mode == "scene"
+    assert game.parallax.is_boss_arena()
+    assert game.zone_stage == 2
 
 
 def test_queda_na_clareira_fere_e_devolve_ao_checkpoint(game, monkeypatch):
@@ -125,6 +135,18 @@ def test_camera_deixa_o_caminho_a_frente_visivel(game, monkeypatch):
     screen_x = game.player.rect.centerx - game.camera_x
     assert 0.32 * SCREEN_WIDTH < screen_x < 0.50 * SCREEN_WIDTH
     assert game.camera_x > 0
+
+
+def test_desenha_a_clareira_das_fendas_com_debug(game, monkeypatch):
+    _idle_keys(monkeypatch)
+    game.begin_forest_crossing()
+    game.player.rect.midbottom = (TRAIL_ORIGIN_X + 90, GROUND_Y)
+    game.player.on_ground = True
+    game.debug_draw = True
+    game.state.update(game)
+    game.state.draw(game, game.screen)
+    assert game.zone_stage == 1
+    assert not hasattr(game, "vines") or not game.vines
 
 
 def test_derrotar_o_mapinguari_vai_para_vitoria(game, monkeypatch):

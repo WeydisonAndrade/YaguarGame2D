@@ -15,10 +15,10 @@ from src.config import (
     FPS,
     TOTAL_HERBS_TO_COLLECT,
     FOREST_CROSSING_PLATFORMS,
+    FOREST_WORLD_WIDTH,
     GROUND_Y,
     ONCA_WAVE_KINDS,
     PLATFORMS,
-    TRAIL_WORLD_WIDTH,
 )
 from src.entities import (
     YaguarPlayer,
@@ -90,7 +90,7 @@ class Game:
         if self.zone_stage == 1:
             return
         self.zone_stage = 1
-        set_physics_world(FOREST_CROSSING_PLATFORMS, TRAIL_WORLD_WIDTH, allow_pits=True)
+        set_physics_world(FOREST_CROSSING_PLATFORMS, FOREST_WORLD_WIDTH, allow_pits=True)
         self.parallax.use_crossing()
         self.player.checkpoint = (int(self.player.rect.centerx), GROUND_Y)
         self.player.safe_feet = (int(self.player.rect.centerx), GROUND_Y)
@@ -104,7 +104,7 @@ class Game:
         self.player.vel_y = 0
         self.player.on_ground = True
         self.player.air_state = "grounded"
-        self.parallax.use_scene(1)
+        self.parallax.use_boss_arena()
         boss = MapinguariBoss(SCREEN_WIDTH - 220, GROUND_Y)
         self.enemies.add(boss)
         self.all_sprites.add(boss)

@@ -25,6 +25,7 @@ POSE_SOURCES = {
 }
 
 TARGET_H = 168
+VINE_POSES = ("grab", "swing_left", "swing_center", "swing_right", "release")
 WHITE = (255, 255, 255)
 TOL = 34
 SOFT = 20
@@ -175,7 +176,8 @@ def load_player_frames() -> dict[str, pygame.Surface]:
     """Garante os PNGs e devolve as Surfaces prontas para o YaguarPlayer."""
     prepare_player_sprites()
     frames: dict[str, pygame.Surface] = {}
-    for name in POSE_SOURCES:
+    names = list(POSE_SOURCES) + list(VINE_POSES)
+    for name in names:
         path = PLAYER_DIR / f"{name}.png"
         if path.exists():
             frames[name] = pygame.image.load(str(path)).convert_alpha()

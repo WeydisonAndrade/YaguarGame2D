@@ -85,75 +85,15 @@ def apply_gravity_and_platforms(rect: pygame.Rect, vel_y: float, on_ground: bool
     return rect, vel_y, grounded
 
 
-def _recolor_onca_pintada(src: pygame.Surface) -> pygame.Surface:
-    """Converte o sprite espectral (carvão e brasa) para pelagem de onça-pintada."""
-    w, h = src.get_size()
-    buf = bytearray(pygame.image.tostring(src, "RGBA"))
-    n = len(buf)
-    i = 0
-    while i < n:
-        r, g, b, a = buf[i], buf[i + 1], buf[i + 2], buf[i + 3]
-        if a >= 10:
-            lum = 0.30 * r + 0.59 * g + 0.11 * b
-            tooth = min(r, g, b) > 150 and abs(r - g) < 45 and abs(g - b) < 45
-            eye = r > 140 and g < 90 and b < 90 and a > 180
-            ember = r > 88 and r > g + 8 and r > b + 15
-            if tooth:
-                pass
-            elif eye:
-                buf[i], buf[i + 1], buf[i + 2] = 236, 196, 48
-            elif ember:
-                if a < 165:
-                    buf[i], buf[i + 1], buf[i + 2] = 214, 164, 68
-                    buf[i + 3] = max(18, int(a * 0.26))
-                else:
-                    # Brasa vira roseta: centro quase preto, borda marrom.
-                    heat = max(0.0, min(1.0, (r - 90) / 140.0))
-                    buf[i] = int(18 + heat * 28)
-                    buf[i + 1] = int(10 + heat * 16)
-                    buf[i + 2] = int(6 + heat * 8)
-            else:
-                t = max(0.0, min(1.0, lum / 72.0))
-                buf[i] = int(138 + t * 96)
-                buf[i + 1] = int(86 + t * 92)
-                buf[i + 2] = int(32 + t * 52)
-        i += 4
-    return _surface_from_rgba(bytes(buf), (w, h))
+def _scale_onca_frame(raw: pygame.Surface) -> pygame.Surface:
+    size = (max(1, int(raw.get_width() * ONCA_SCALE)), max(1, int(raw.get_height() * ONCA_SCALE)))
+    return pygame.transform.smoothscale(raw, size)
 
 
-def _recolor_onca_pantera(src: pygame.Surface) -> pygame.Surface:
-    """Converte o sprite espectral (carvão e brasa) para pelagem negra de pantera."""
-    w, h = src.get_size()
-    buf = bytearray(pygame.image.tostring(src, "RGBA"))
-    n = len(buf)
-    i = 0
-    while i < n:
-        r, g, b, a = buf[i], buf[i + 1], buf[i + 2], buf[i + 3]
-        if a >= 10:
-            lum = 0.30 * r + 0.59 * g + 0.11 * b
-            eye = r > 180 and g < 55 and b < 60 and a > 200
-            if eye:
-                buf[i], buf[i + 1], buf[i + 2] = 232, 188, 42
-            elif a < 140:
-                buf[i], buf[i + 1], buf[i + 2] = 14, 12, 18
-                buf[i + 3] = max(6, int(a * 0.10))
-            else:
-                t = max(0.0, min(1.0, lum / 90.0))
-                if r > 80 and r > b + 8:
-                    t = min(t, 0.32)
-                buf[i] = int(6 + t * 40)
-                buf[i + 1] = int(6 + t * 36)
-                buf[i + 2] = int(10 + t * 48)
-        i += 4
-    return _surface_from_rgba(bytes(buf), (w, h))
-
-
-def _surface_from_rgba(data: bytes, size: tuple[int, int]) -> pygame.Surface:
-    if hasattr(pygame.image, "frombytes"):
-        out = pygame.image.frombytes(data, size, "RGBA")
-    else:
-        out = pygame.image.fromstring(data, size, "RGBA")
-    return out.convert_alpha()
+def _pose_from_base(base: pygame.Surface, sx: float, sy: float) -> pygame.Surface:
+    w = max(1, int(base.get_width() * sx))
+    h = max(1, int(base.get_height() * sy))
+    return pygame.transform.smoothscale(base, (w, h))
 
 
 class GameObject(pygame.sprite.Sprite):
@@ -204,6 +144,7 @@ class YaguarPlayer(pygame.sprite.Sprite):
         self.spear_attacks = 0  # Conta golpes de lança para o rugido a cada SPEAR_ROAR_EVERY
         self.spear_magic = 0    # Frames de encantamento da lança após o rugido
         self._roar_fx = False
+        self._jump_held = False
 
     @property
     def hurtbox(self) -> pygame.Rect:
@@ -257,12 +198,13 @@ class YaguarPlayer(pygame.sprite.Sprite):
         if running:
             self.stamina = max(0, self.stamina - 0.35)
 
+        want_jump = keys[pygame.K_w] or keys[pygame.K_UP] or keys[pygame.K_SPACE]
+        self._jump_held = bool(want_jump)
+
         if dx != 0:
             if not self.attacking:
                 self.facing = 1 if dx > 0 else -1
             self.rect.x += int(dx * speed)
-
-        want_jump = keys[pygame.K_w] or keys[pygame.K_UP] or keys[pygame.K_SPACE]
         if want_jump and self.on_ground and not self.crouching and not self.blocking and not self.attacking:
             self.vel_y = JUMP_VELOCITY
             self.on_ground = False
@@ -446,65 +388,27 @@ class SpectralJaguar(BaseEnemy):
         health, speed, damage = stats[kind]
         super().__init__(x, y, "assets/enemy_onca_spectral.png", health=health, speed=speed, damage=damage)
         self.kind = kind
-        if kind == "normal":
-            self.walk_speed = 2.05
-            self.run_speed = 4.2
-            self.run_distance = 230
-            self.attack_range = 98
-            self.recover_cooldown = 46
-            self.strike_frames = 34
-            self.anim_run = 9
-            self.anim_walk = 15
-            self.bite_lunge = 8
-            self.charge_lunge = 8
-            self.claw_damage = 7
-            self.bite_damage = 10
-        elif kind == "pantera":
-            self.walk_speed = ONCA_WALK_SPEED + 0.8
-            self.run_speed = ONCA_RUN_SPEED + 0.6
-            self.run_distance = 110
-            self.attack_range = 130
-            self.recover_cooldown = 28
-            self.strike_frames = 26
-            self.anim_run = 5
-            self.anim_walk = 9
-            self.bite_lunge = 18
-            self.charge_lunge = 20
-            self.claw_damage = 9
-            self.bite_damage = 12
-        else:
-            self.walk_speed = ONCA_WALK_SPEED
-            self.run_speed = ONCA_RUN_SPEED
-            self.run_distance = ONCA_RUN_DISTANCE
-            self.attack_range = 130
-            self.recover_cooldown = 28
-            self.strike_frames = 26
-            self.anim_run = 5
-            self.anim_walk = 9
-            self.bite_lunge = 18
-            self.charge_lunge = 20
-            self.claw_damage = 9
-            self.bite_damage = 12
+        self.walk_speed = ONCA_WALK_SPEED
+        self.run_speed = ONCA_RUN_SPEED
+        self.run_distance = ONCA_RUN_DISTANCE
+        self.attack_range = 130
+        self.recover_cooldown = 28
+        self.strike_frames = 26
+        self.anim_run = 5
+        self.anim_walk = 9
+        self.bite_lunge = 18
+        self.charge_lunge = 20
+        self.claw_damage = 9
+        self.bite_damage = 12
         self.speed = self.walk_speed
         self.frames = {}
         for name in ("idle", "claw", "bite"):
             raw = pygame.image.load(f"assets/onca/{name}.png").convert_alpha()
-            size = (max(1, int(raw.get_width() * ONCA_SCALE)), max(1, int(raw.get_height() * ONCA_SCALE)))
-            frame = pygame.transform.smoothscale(raw, size)
-            if kind == "normal":
-                frame = _recolor_onca_pintada(frame)
-            elif kind == "pantera":
-                frame = _recolor_onca_pantera(frame)
-            self.frames[name] = frame
-        # Dois frames de corrida derivados do idle e da mordida
+            self.frames[name] = _scale_onca_frame(raw)
         idle = self.frames["idle"]
         bite = self.frames["bite"]
-        self.frames["run1"] = pygame.transform.smoothscale(
-            idle, (max(1, int(idle.get_width() * 1.04)), max(1, int(idle.get_height() * 0.96)))
-        )
-        self.frames["run2"] = pygame.transform.smoothscale(
-            bite, (max(1, int(bite.get_width() * 0.92)), max(1, int(bite.get_height() * 0.94)))
-        )
+        self.frames["run1"] = _pose_from_base(idle, 1.04, 0.96)
+        self.frames["run2"] = _pose_from_base(bite, 0.92, 0.94)
         self.image = self.frames["idle"]
         self.rect = self.image.get_rect(midbottom=(x, y))
         self.facing = -1

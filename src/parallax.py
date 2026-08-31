@@ -14,10 +14,14 @@ from src.trail_art import ensure_crossing_world, ensure_trail_art
 ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
 PARALLAX_DIR = ASSETS_DIR / "parallax"
 
+BOSS_ARENA_FILE = "mapinguari_arena.png"
 SCENE_FILES = (
     "forest1.png",
-    "forest2.png",
+    BOSS_ARENA_FILE,
 )
+SCENE_FALLBACKS = {
+    BOSS_ARENA_FILE: "forest2.png",
+}
 
 COVER_PAD_X = 1.14
 COVER_PAD_Y = 1.10
@@ -69,12 +73,21 @@ class ParallaxBackground:
             int(SCREEN_HEIGHT * COVER_PAD_Y),
         )
         self.scenes: list[pygame.Surface] = []
+        self.boss_index = 0
         for filename in SCENE_FILES:
             path = PARALLAX_DIR / filename
             if not path.exists():
+                fallback = SCENE_FALLBACKS.get(filename)
+                path = PARALLAX_DIR / fallback if fallback else path
+            if not path.exists():
                 continue
             raw = pygame.image.load(str(path)).convert()
-            self.scenes.append(_cover_scale(raw, *target))
+            if filename == BOSS_ARENA_FILE:
+                # Arena de combate: a pintura preenche a tela sem zoom extra.
+                self.boss_index = len(self.scenes)
+                self.scenes.append(_cover_scale(raw, SCREEN_WIDTH, SCREEN_HEIGHT))
+            else:
+                self.scenes.append(_cover_scale(raw, *target))
 
         if not self.scenes:
             fallback = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -127,9 +140,17 @@ class ParallaxBackground:
         }
 
     def use_scene(self, index: int) -> None:
-        """0 = floresta das onças / menu; 1 = caminho do Mapinguari."""
+        """0 = floresta das onças / menu; 1 = arena do Mapinguari (cume e caverna)."""
         self.mode = "scene"
         self.index = max(0, min(index, len(self.scenes) - 1))
+
+    def use_boss_arena(self) -> None:
+        """Cume da montanha e boca da caverna: palco da luta com o Mapinguari."""
+        self.mode = "scene"
+        self.index = max(0, min(self.boss_index, len(self.scenes) - 1))
+
+    def is_boss_arena(self) -> bool:
+        return self.mode == "scene" and self.index == self.boss_index
 
     def use_crossing(self) -> None:
         """Arena e clareira no mesmo mundo: a câmera desliza pelo strip contínuo."""
@@ -208,6 +229,13 @@ class ParallaxBackground:
             self._draw_continuous(screen, focus, camera_x)
             return
         surf = self._current()
+        if self.is_boss_arena():
+            if surf.get_width() == SCREEN_WIDTH and surf.get_height() == SCREEN_HEIGHT:
+                screen.blit(surf, (0, 0))
+            else:
+                screen.blit(surf, self._offset(surf, PARALLAX_FACTOR, focus))
+            self._draw_motes(screen)
+            return
         screen.blit(surf, self._offset(surf, PARALLAX_FACTOR, focus))
         self._draw_godrays(screen)
         self._draw_mist(screen)

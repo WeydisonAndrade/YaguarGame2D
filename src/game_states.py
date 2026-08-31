@@ -7,13 +7,13 @@ from __future__ import annotations
 
 import math
 import pygame
-import random
 from src import audio
 from src.config import (SCREEN_WIDTH, SCREEN_HEIGHT, COLOR_TEXT, COLOR_GOLD,
                         COLOR_RED, COLOR_SCARLET, TOTAL_HERBS_TO_COLLECT, GROUND_Y,
-                        ONCA_WAVE_TOTAL, ONCA_WAVE_KINDS, TRAIL_EXIT_X, TRAIL_FALL_DAMAGE,
-                        TRAIL_FALL_Y, FOREST_CROSSING_PLATFORMS, TRAIL_ORIGIN_X,
-                        TRAIL_WORLD_WIDTH, CAMERA_ANCHOR_FWD, CAMERA_ANCHOR_BACK,
+                        ONCA_WAVE_TOTAL, ONCA_WAVE_KINDS, MAPINGUARI_GATE_X, TRAIL_FALL_DAMAGE,
+                        TRAIL_FALL_Y, FOREST_CROSSING_PLATFORMS, FOREST_WORLD_WIDTH,
+                        TRAIL_ORIGIN_X,
+                        CAMERA_ANCHOR_FWD, CAMERA_ANCHOR_BACK,
                         CAMERA_DEADZONE, CAMERA_LERP)
 from src.entities import YaguarPlayer, SpectralJaguar, MapinguariBoss, HerbItem
 from src.fx import blit_flashed
@@ -21,8 +21,8 @@ from src.ui import PauseOverlay, RitualHUD, RitualMenu, SynopsisPlate
 from src.cinematic import CinematicSequence
 
 _ONCA_ZONE_NAMES = {
-    "normal": "Onça-pintada",
-    "pantera": "Pantera",
+    "normal": "Onça Espectral",
+    "pantera": "Onça Espectral",
     "espectral": "Onça Espectral",
 }
 
@@ -52,7 +52,7 @@ def _defeat_player(game) -> bool:
 
 
 def _respawn_from_fall(game) -> None:
-    """Devolve Yáguar ao checkpoint da falésia após cair na fenda."""
+    """Devolve Yáguar ao checkpoint após cair na fenda."""
     feet = getattr(game.player, "checkpoint", None) or (TRAIL_ORIGIN_X + 80, GROUND_Y)
     game.player.health = max(0.0, game.player.health - TRAIL_FALL_DAMAGE)
     game.player.rect.midbottom = (int(feet[0]), int(feet[1]))
@@ -60,7 +60,8 @@ def _respawn_from_fall(game) -> None:
     game.player.on_ground = True
     game.player.air_state = "grounded"
     game.player.invuln = 26
-    game.camera_x = max(0, min(TRAIL_WORLD_WIDTH - SCREEN_WIDTH, game.player.rect.centerx - SCREEN_WIDTH // 2))
+    max_cam = max(0, FOREST_WORLD_WIDTH - SCREEN_WIDTH)
+    game.camera_x = max(0, min(max_cam, game.player.rect.centerx - SCREEN_WIDTH // 2))
     game.fx.player_hurt(game.player.hurtbox.centerx, game.player.hurtbox.centery, TRAIL_FALL_DAMAGE, False)
 
 
@@ -68,7 +69,7 @@ def _follow_camera(game) -> None:
     """Câmera lateral com look-ahead: o guerreiro fica ~40% da tela ao avançar."""
     facing = getattr(game.player, "facing", 1)
     anchor = CAMERA_ANCHOR_FWD if facing >= 0 else CAMERA_ANCHOR_BACK
-    max_cam = max(0, TRAIL_WORLD_WIDTH - SCREEN_WIDTH)
+    max_cam = max(0, FOREST_WORLD_WIDTH - SCREEN_WIDTH)
     cur = float(getattr(game, "camera_x", 0))
     screen_x = game.player.rect.centerx - cur
     ratio = screen_x / SCREEN_WIDTH if SCREEN_WIDTH else 0.5
@@ -91,26 +92,36 @@ def _update_trail_checkpoint(player) -> None:
             return
 
 
+def _crossing_zone_label(player) -> str:
+    x = player.rect.centerx
+    if x >= MAPINGUARI_GATE_X - 80:
+        return "Caminho da Montanha Sagrada"
+    if x >= TRAIL_ORIGIN_X:
+        return "Clareira — pule sobre as fendas"
+    return "Floresta — o caminho se abre"
+
+
 def _draw_fendas_debug(game, screen) -> None:
-    """F3: colliders, câmera, world x e origem visual da clareira."""
+    """F3: colliders, câmera e origem das regiões."""
     cam = int(getattr(game, "camera_x", 0))
     ox, oy = game.fx.ox - cam, game.fx.oy
-    font = pygame.font.SysFont("consolas", 14)
+    font = pygame.font.SysFont("consolas", 13)
     for box in FOREST_CROSSING_PLATFORMS:
         pygame.draw.rect(screen, (80, 220, 255), pygame.Rect(*box).move(ox, oy), 2)
     pygame.draw.line(screen, (220, 50, 50), (0, TRAIL_FALL_Y), (SCREEN_WIDTH, TRAIL_FALL_Y), 1)
-    seam = TRAIL_ORIGIN_X - cam
-    if 0 <= seam <= SCREEN_WIDTH:
-        pygame.draw.line(screen, (255, 180, 40), (seam, 0), (seam, SCREEN_HEIGHT), 1)
+    for seam, color in ((TRAIL_ORIGIN_X, (255, 180, 40)), (MAPINGUARI_GATE_X, (220, 80, 80))):
+        sx = seam - cam
+        if 0 <= sx <= SCREEN_WIDTH:
+            pygame.draw.line(screen, color, (sx, 0), (sx, SCREEN_HEIGHT), 1)
     ck = game.player.checkpoint
     pygame.draw.circle(screen, (255, 220, 80), (int(ck[0] + ox), int(ck[1] - 8 + oy)), 6, 2)
+    p = game.player
     lines = (
-        f"world_x={game.player.rect.centerx}  cam={cam}  feet={game.player.rect.bottom}",
-        f"vel_y={game.player.vel_y:.1f}  {game.player.air_state}  ground_y={GROUND_Y}",
-        f"screen_x={game.player.rect.centerx - cam}  F3 debug",
+        f"world_x={p.rect.centerx}  cam={cam}  feet={p.rect.bottom}",
+        f"vel_y={p.vel_y:.1f}  {p.air_state}  F3",
     )
     for i, text in enumerate(lines):
-        screen.blit(font.render(text, True, (245, 240, 210)), (16, SCREEN_HEIGHT - 72 + i * 16))
+        screen.blit(font.render(text, True, (245, 240, 210)), (16, SCREEN_HEIGHT - 48 + i * 16))
 
 
 class GameState:
@@ -196,6 +207,7 @@ class BossCinematicState(GameState):
     def _begin_boss(self, game) -> None:
         if not any(isinstance(e, MapinguariBoss) for e in game.enemies):
             game.spawn_mapinguari()
+        self.playing.current_zone = "Cume — entrada da grande Caverna"
         game.change_state(self.playing)
 
     def handle_events(self, game, event):
@@ -351,16 +363,13 @@ class PlayingState(GameState):
 
         if game.zone_stage == 1:
             _follow_camera(game)
-            if game.player.rect.centerx >= TRAIL_ORIGIN_X:
-                self.current_zone = "Clareira — pule sobre as fendas"
-            else:
-                self.current_zone = "Floresta — o caminho se abre"
+            self.current_zone = _crossing_zone_label(game.player)
             _update_trail_checkpoint(game.player)
             if not game.player.on_ground and game.player.rect.bottom > TRAIL_FALL_Y:
                 _respawn_from_fall(game)
                 if _defeat_player(game):
                     return
-            if game.player.rect.centerx >= TRAIL_EXIT_X:
+            if game.player.rect.centerx >= MAPINGUARI_GATE_X:
                 game.zone_stage = 2
                 self.current_zone = "Caminho da Montanha Sagrada"
                 game.change_state(BossCinematicState(self))
@@ -376,7 +385,7 @@ class PlayingState(GameState):
         cam = int(getattr(game, "camera_x", 0))
         focus = (game.player.rect.centerx - cam, GROUND_Y - 90)
         game.parallax.draw_back(screen, focus, cam)
-        if game.zone_stage >= 2:
+        if game.zone_stage >= 2 and not game.parallax.is_boss_arena():
             game.parallax.draw_corrupt_veil(screen)
 
         ox, oy = game.fx.ox - cam, game.fx.oy

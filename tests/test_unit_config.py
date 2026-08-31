@@ -26,6 +26,7 @@ REQUIRED_IMAGES = (
     "onca/idle.png",
     "onca/claw.png",
     "onca/bite.png",
+    "onca/pintada.png",
     "mapinguari/idle.png",
     "mapinguari/attack.png",
     "mapinguari/throw.png",
@@ -33,6 +34,7 @@ REQUIRED_IMAGES = (
     "herb.png",
     "parallax/forest1.png",
     "parallax/forest2.png",
+    "parallax/mapinguari_arena.png",
     "cinematic_animation/img01.png",
     "cinematic_animation/img06.png",
     "cinematic_animation/epic_music01.mp3",
@@ -77,16 +79,69 @@ def test_clareira_e_pintura_estatica():
 def test_mundo_da_travessia_e_continuo():
     from PIL import Image
 
-    from src.config import TRAIL_ORIGIN_X, TRAIL_WORLD_WIDTH
+    from src.config import FOREST_WORLD_WIDTH, TRAIL_ORIGIN_X
     from src.trail_art import CROSSING_PATH, ensure_crossing_world
 
     ensure_crossing_world()
     world = Image.open(CROSSING_PATH)
     assert world.mode == "RGB"
-    assert world.size == (TRAIL_WORLD_WIDTH, SCREEN_HEIGHT)
+    assert world.size == (FOREST_WORLD_WIDTH, SCREEN_HEIGHT)
     # A costura não pode ser um corte vertical de cor sólida.
     seam = TRAIL_ORIGIN_X
     left = list(world.getpixel((seam - 8, 80)))
     right = list(world.getpixel((seam + 8, 80)))
     delta = sum(abs(a - b) for a, b in zip(left, right))
     assert delta < 90
+
+
+def test_travessia_nao_repete_a_floresta_da_arena():
+    """O trecho à direita não é uma cópia lado a lado de forest1."""
+    from PIL import Image
+
+    from src.config import FOREST_WORLD_WIDTH
+    from src.trail_art import CROSSING_PATH, ensure_crossing_world
+
+    ensure_crossing_world()
+    world = Image.open(CROSSING_PATH)
+    a = world.getpixel((180, 360))
+    b = world.getpixel((180 + SCREEN_WIDTH, 360))
+    delta = sum(abs(x - y) for x, y in zip(a, b))
+    assert delta > 40
+    assert world.size[0] == FOREST_WORLD_WIDTH
+
+
+def test_mundo_da_travessia_termina_na_clareira():
+    from PIL import Image
+
+    from src.config import FOREST_WORLD_WIDTH, TRAIL_WORLD_WIDTH
+    from src.trail_art import CROSSING_PATH, ensure_crossing_world
+
+    ensure_crossing_world()
+    world = Image.open(CROSSING_PATH)
+    assert world.size == (TRAIL_WORLD_WIDTH, SCREEN_HEIGHT)
+    assert FOREST_WORLD_WIDTH == TRAIL_WORLD_WIDTH
+
+
+def _opaque_paper_pixels(path: Path, luma_min: float = 220) -> int:
+    from PIL import Image
+
+    img = Image.open(path).convert("RGBA")
+    px = img.load()
+    width, height = img.size
+    count = 0
+    for y in range(height):
+        for x in range(width):
+            r, g, b, a = px[x, y]
+            if a <= 80:
+                continue
+            luma = 0.3 * r + 0.59 * g + 0.11 * b
+            sat = max(r, g, b) - min(r, g, b)
+            if luma >= luma_min and sat < 30:
+                count += 1
+    return count
+
+
+def test_mapinguari_throw_sem_fundo_branco_nos_bracos():
+    """O oco entre os braços e o tronco arremessado não pode ser papel branco."""
+    assert _opaque_paper_pixels(ASSETS / "mapinguari" / "throw.png") < 20
+    assert _opaque_paper_pixels(ASSETS / "tree_trunk.png") < 20

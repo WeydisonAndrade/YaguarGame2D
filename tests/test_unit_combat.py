@@ -138,51 +138,34 @@ def test_erva_nasce_com_os_pes_no_chao():
     assert herb.rect.bottom == GROUND_Y
 
 
-def _mean_opaque_rgb(surf: pygame.Surface) -> tuple[float, float, float]:
-    buf = pygame.image.tostring(surf, "RGBA")
-    rs = gs = bs = n = 0
-    for i in range(0, len(buf), 4):
-        if buf[i + 3] > 80:
-            rs += buf[i]
-            gs += buf[i + 1]
-            bs += buf[i + 2]
-            n += 1
-    return rs / n, gs / n, bs / n
-
-
-def test_primeira_onca_e_pintada_e_mais_lenta():
+def test_tres_oncas_usam_o_aspecto_espectral():
     pintada = SpectralJaguar(800, GROUND_Y, kind="normal")
-    espectral = SpectralJaguar(800, GROUND_Y, kind="espectral")
-
-    assert pintada.kind == "normal"
-    assert pintada.walk_speed < ONCA_WALK_SPEED
-    assert pintada.walk_speed < espectral.walk_speed
-    assert pintada.run_speed < ONCA_RUN_SPEED
-    assert pintada.run_speed < espectral.run_speed
-    assert pintada.recover_cooldown > espectral.recover_cooldown
-    assert pintada.strike_frames > espectral.strike_frames
-    assert pintada.attack_range < espectral.attack_range
-
-    gold = _mean_opaque_rgb(pintada.frames["idle"])
-    lava = _mean_opaque_rgb(espectral.frames["idle"])
-    assert gold[0] > 110
-    assert gold[1] > 70
-    assert gold[1] > gold[2]
-    assert gold[1] > lava[1]
-
-
-def test_segunda_onca_e_pantera_negra():
     pantera = SpectralJaguar(800, GROUND_Y, kind="pantera")
-    pintada = SpectralJaguar(800, GROUND_Y, kind="normal")
     espectral = SpectralJaguar(800, GROUND_Y, kind="espectral")
 
-    assert pantera.kind == "pantera"
-    black = _mean_opaque_rgb(pantera.frames["idle"])
-    gold = _mean_opaque_rgb(pintada.frames["idle"])
-    lava = _mean_opaque_rgb(espectral.frames["idle"])
-    lum_black = sum(black) / 3
-    lum_gold = sum(gold) / 3
-    assert lum_black < lum_gold
-    assert lum_black < 55
-    assert black[0] < lava[0]
-    assert black[0] < 55
+    for cat in (pintada, pantera, espectral):
+        assert cat.walk_speed == ONCA_WALK_SPEED
+        assert cat.run_speed == ONCA_RUN_SPEED
+        assert cat.run_distance == espectral.run_distance
+        assert cat.attack_range == espectral.attack_range
+        assert cat.recover_cooldown == espectral.recover_cooldown
+        assert cat.strike_frames == espectral.strike_frames
+        assert cat.bite_lunge == espectral.bite_lunge
+        assert cat.charge_lunge == espectral.charge_lunge
+        assert cat.anim_run == espectral.anim_run
+        assert cat.anim_walk == espectral.anim_walk
+        assert set(cat.frames) == set(espectral.frames)
+
+    for pose in ("idle", "claw", "bite", "run1", "run2"):
+        ref = pygame.image.tostring(espectral.frames[pose], "RGBA")
+        assert pygame.image.tostring(pintada.frames[pose], "RGBA") == ref
+        assert pygame.image.tostring(pantera.frames[pose], "RGBA") == ref
+
+    player = (200, GROUND_Y - 55)
+    for _ in range(40):
+        pintada.update(player)
+        pantera.update(player)
+        espectral.update(player)
+    assert pintada.rect.centerx == pantera.rect.centerx == espectral.rect.centerx
+    assert pintada.running is pantera.running is espectral.running is True
+    assert pintada.action == pantera.action == espectral.action

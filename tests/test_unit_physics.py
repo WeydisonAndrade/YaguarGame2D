@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pygame
 
-from src.config import GRAVITY, GROUND_Y, JUMP_VELOCITY, SCREEN_HEIGHT, SCREEN_WIDTH
+from src.config import GRAVITY, GROUND_Y, JUMP_VELOCITY, PLAYER_RUN_SPEED, PLAYER_WALK_SPEED, SCREEN_HEIGHT, SCREEN_WIDTH
 from src.config import TRAIL_GAP_1_WIDTH, TRAIL_GAP_2_WIDTH, TRAIL_PLATFORMS, TRAIL_WORLD_WIDTH
 from src.entities import apply_gravity_and_platforms, platform_rects, set_physics_world
 
@@ -78,10 +78,15 @@ def test_corpo_nao_cai_abaixo_do_chao_mesmo_com_vel_alta():
 
 def test_fendas_exigem_salto_e_cabem_na_corrida():
     """A 1ª fenda da pintura cabe no pulo a pé (~156 px); a 2ª pede corrida (~273 px)."""
+    walk_range = int(PLAYER_WALK_SPEED) * 39
+    run_range = int(PLAYER_RUN_SPEED) * 39
+    assert walk_range == 156
+    assert run_range == 273
     assert TRAIL_GAP_1_WIDTH > 80
-    assert TRAIL_GAP_1_WIDTH < 156
-    assert TRAIL_GAP_2_WIDTH > 156
-    assert TRAIL_GAP_2_WIDTH < 273 - 40
+    assert TRAIL_GAP_1_WIDTH < walk_range
+    assert walk_range - TRAIL_GAP_1_WIDTH >= 8
+    assert TRAIL_GAP_2_WIDTH > walk_range
+    assert TRAIL_GAP_2_WIDTH < run_range - 40
 
 
 def _lip_rect(plat: pygame.Rect, ground_y: int) -> pygame.Rect:
@@ -137,13 +142,13 @@ def test_pulo_correndo_cruza_as_duas_fendas():
 
 def test_clareira_continua_o_chao_da_arena():
     """Arena e fendas compartilham a mesma linha de grama, sem degrau na costura."""
-    from src.config import FOREST_CROSSING_PLATFORMS, PLATFORMS, TRAIL_ORIGIN_X
+    from src.config import FOREST_CROSSING_PLATFORMS, FOREST_WORLD_WIDTH, PLATFORMS, TRAIL_ORIGIN_X
 
     assert all(box[1] == GROUND_Y for box in FOREST_CROSSING_PLATFORMS)
     arena = FOREST_CROSSING_PLATFORMS[0]
     assert arena[0] + arena[2] == TRAIL_ORIGIN_X
 
-    set_physics_world(FOREST_CROSSING_PLATFORMS, TRAIL_WORLD_WIDTH, allow_pits=True)
+    set_physics_world(FOREST_CROSSING_PLATFORMS, FOREST_WORLD_WIDTH, allow_pits=True)
     try:
         rect = pygame.Rect(0, 0, 92, 168)
         rect.midbottom = (TRAIL_ORIGIN_X, GROUND_Y)

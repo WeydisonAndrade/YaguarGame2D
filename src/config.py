@@ -97,6 +97,9 @@ TRAIL_PLATFORMS = (
     (TRAIL_B_X, TRAIL_GROUND_Y, TRAIL_PLATFORM_B_WIDTH, TRAIL_MID_LEDGE_HEIGHT),
     (TRAIL_C_X, TRAIL_GROUND_Y, TRAIL_PLATFORM_C_WIDTH, TRAIL_LEDGE_HEIGHT),
 )
+
+FOREST_WORLD_WIDTH = TRAIL_WORLD_WIDTH
+MAPINGUARI_GATE_X = TRAIL_WORLD_WIDTH - 72
 FOREST_CROSSING_PLATFORMS = PLATFORMS + TRAIL_PLATFORMS
 
 # Câmera da travessia: Yáguar fica ~40% da tela ao avançar, para ver o caminho.
@@ -106,7 +109,6 @@ CAMERA_DEADZONE = 0.055
 CAMERA_LERP = 0.14
 CROSSING_BLEND_PX = 220
 CROSSING_OVERHANG_PX = 200
-FOREST_FAR_GROUND_SRC_Y = 820
 
 # ---------------------------------------------------------------------------
 # Cinemática da introdução (após o menu, antes da partida)

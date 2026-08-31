@@ -581,22 +581,20 @@ class RitualHUD:
         screen.blit(hint, (SCREEN_WIDTH - hint.get_width() - 18, 18))
 
     def _draw_challenge(self, game, screen: pygame.Surface) -> None:
-        on_clareira = (
-            getattr(game, "zone_stage", 0) == 1
-            and game.player.rect.centerx >= TRAIL_ORIGIN_X
-        )
-        if not on_clareira:
+        on_path = getattr(game, "zone_stage", 0) == 1 and game.player.rect.centerx >= TRAIL_ORIGIN_X
+        if not on_path:
             return
-        plate = pygame.Rect(SCREEN_WIDTH - 378, 42, 360, 52)
+        plate = pygame.Rect(SCREEN_WIDTH - 268, 40, 250, 44)
         body = pygame.Surface(plate.size, pygame.SRCALPHA)
         pygame.draw.rect(body, (*COLOR_BARK, 210), body.get_rect(), border_radius=8)
         screen.blit(body, plate.topleft)
         pygame.draw.rect(screen, COLOR_GOLD_SHADOW, plate, 2, border_radius=8)
         pygame.draw.rect(screen, COLOR_GOLD_LEAF, plate.inflate(-6, -6), 1, border_radius=6)
         title = self.font_label.render("DESAFIO", True, COLOR_MOSS)
-        screen.blit(title, (plate.x + 14, plate.y + 8))
-        line = self.font_hint.render("Pule sobre as fendas para continuar.", True, COLOR_PARCHMENT)
-        screen.blit(line, (plate.x + 14, plate.y + 28))
+        screen.blit(title, (plate.x + 12, plate.y + 6))
+        hint = "Pule as fendas para continuar."
+        line = self.font_hint.render(hint, True, COLOR_PARCHMENT)
+        screen.blit(line, (plate.x + 12, plate.y + 24))
 
     def _draw_enemy_bars(self, game, screen: pygame.Surface) -> None:
         """Barras sem nome, ancoradas acima da hurtbox de cada inimigo."""
