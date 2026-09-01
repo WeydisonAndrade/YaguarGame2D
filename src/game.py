@@ -38,6 +38,10 @@ class Game:
     def __init__(self):
         audio.init()
         pygame.init()
+        try:
+            pygame.joystick.init()
+        except pygame.error:
+            pass
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
         pygame.display.set_caption("YÁGUAR — Fase 1: O Chamado da Floresta")
         self.clock = pygame.time.Clock()
@@ -45,6 +49,8 @@ class Game:
         self.parallax = ParallaxBackground()
         self.fx = CombatFX()
         self.debug_draw = False
+        self.dt = 1.0 / FPS
+        self.cam_look_y = 0.0
 
         self.state = MenuState()
         self.reset_level()
@@ -55,6 +61,7 @@ class Game:
         self.zone_stage = 0
         self.camera_x = 0
         self.herbs_collected = 0
+        self.herbs_held = 0
         self.jaguars_defeated = 0
 
         self.all_sprites = pygame.sprite.Group()
@@ -115,7 +122,8 @@ class Game:
 
     def run(self):
         while self.running:
-            self.clock.tick(FPS)
+            raw_ms = self.clock.tick(FPS)
+            self.dt = min(raw_ms / 1000.0, 0.05) if raw_ms else (1.0 / FPS)
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:

@@ -1,5 +1,7 @@
 """Constantes globais da Fase 1: janela, paleta, física e metas de missão."""
 
+import pygame as _pg
+
 # ---------------------------------------------------------------------------
 # Janela
 # ---------------------------------------------------------------------------
@@ -51,6 +53,43 @@ ATTACK_ACTIVE_END = 6
 HITSTUN_FRAMES = 16
 KNOCKBACK = 22
 GROUND_Y = 478                     # Linha do chão na pintura da floresta
+
+# ---------------------------------------------------------------------------
+# Controles (um único lugar — não hardcode teclas nos estados)
+# ---------------------------------------------------------------------------
+KEY_BOW_AIM = _pg.K_q              # Segurar: sacar flecha, nock e mirar
+KEY_ATTACK = _pg.K_j               # Lança, ou disparo com o arco sacado
+MOUSE_ATTACK = 1                   # event.button esquerdo
+MOUSE_ATTACK_HELD = 0              # índice em mouse.get_pressed()
+MOUSE_HEAVY = 3                    # event.button direito
+MOUSE_HEAVY_HELD = 2               # índice em mouse.get_pressed()
+
+# ---------------------------------------------------------------------------
+# Arco e flecha (tempos em segundos; a física da flecha usa dt)
+# ---------------------------------------------------------------------------
+BOW_AIM_SPEED = 0.52               # Fração da caminhada durante a mira
+BOW_NOCK = 0.42                    # Sacar da aljava e encaixar a flecha
+BOW_MAX_CHARGE = 0.55
+BOW_RECOVER = 0.20
+BOW_MIN_SPEED = 1080.0             # px/s — disparo forte
+BOW_MAX_SPEED = 1580.0
+BOW_GRAVITY = 0.0                  # Linear, como na pose de tiro
+BOW_DAMAGE_MIN = 12
+BOW_DAMAGE_MAX = 24
+BOW_WEAK_MULT = 1.35
+BOW_LIFETIME = 2.6
+BOW_STUCK_TIME = 1.15
+BOW_LOOKAHEAD = 150
+
+# Poses de arco: RGB do corpo = trigger01.png. Só recorte do fundo preto.
+YAGUAR_COLOR_PROFILE = {
+    "ref_poses": ("trigger01",),
+    "sharp_ref": "trigger01",
+    "target_height": 168,
+    "preserve_rgb": True,
+}
+BOW_GRADE_POSES = ("bow", "bow_quiver", "bow_nock")
+KEY_COLOR_COMPARE = _pg.K_F4       # Debug: original vs grade do arco
 
 # Onça espectral: escala visual, onda de 3 e galope
 ONCA_SCALE = 0.78

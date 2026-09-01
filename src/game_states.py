@@ -14,8 +14,10 @@ from src.config import (SCREEN_WIDTH, SCREEN_HEIGHT, COLOR_TEXT, COLOR_GOLD,
                         TRAIL_FALL_Y, FOREST_CROSSING_PLATFORMS, FOREST_WORLD_WIDTH,
                         TRAIL_ORIGIN_X,
                         CAMERA_ANCHOR_FWD, CAMERA_ANCHOR_BACK,
-                        CAMERA_DEADZONE, CAMERA_LERP)
-from src.entities import YaguarPlayer, SpectralJaguar, MapinguariBoss, HerbItem
+                        CAMERA_DEADZONE, CAMERA_LERP,
+                        KEY_ATTACK, KEY_COLOR_COMPARE, MOUSE_ATTACK, MOUSE_HEAVY,
+                        BOW_LOOKAHEAD, FPS)
+from src.entities import YaguarPlayer, SpectralJaguar, MapinguariBoss, HerbItem, Arrow
 from src.fx import blit_flashed
 from src.ui import PauseOverlay, RitualHUD, RitualMenu, SynopsisPlate
 from src.cinematic import CinematicSequence
@@ -33,6 +35,51 @@ def _onca_zone_label(wave_index: int) -> str:
     return f"Floresta — {nome} {wave_index + 1}/{ONCA_WAVE_TOTAL}"
 
 
+HERB_HEAL = 25
+HERB_REACH = 56
+
+
+def _herbs_in_reach(player, herbs) -> list:
+    """Ervas ao alcance dos pés — não exige encostar o sprite inteiro no ícone 32px."""
+    reach = player.hurtbox.inflate(HERB_REACH * 2, HERB_REACH)
+    reach.bottom = max(reach.bottom, player.rect.bottom + 8)
+    return [herb for herb in list(herbs) if reach.colliderect(herb.rect)]
+
+
+def _pickup_herbs(game, herbs) -> int:
+    """Colhe para o bolso. A cura só acontece ao pressionar E."""
+    taken = 0
+    for herb in herbs:
+        if getattr(game, "herbs_held", 0) >= TOTAL_HERBS_TO_COLLECT:
+            break
+        cx, cy = herb.rect.center
+        herb.kill()
+        game.herbs_held = getattr(game, "herbs_held", 0) + 1
+        game.herbs_collected += 1
+        taken += 1
+        game.fx._burst(cx, cy, 0, (86, 168, 72), (214, 172, 78), 10, speed=3.2)
+        game.fx._popup(cx, cy - 18, "ERVA", (168, 220, 120))
+    if taken:
+        audio.play_herb()
+    return taken
+
+
+def _use_sacred_herb(game) -> bool:
+    """Consome uma erva guardada e cura. E é esta função."""
+    if getattr(game, "herbs_held", 0) <= 0:
+        return False
+    body = game.player.hurtbox
+    if game.player.health >= game.player.max_health:
+        game.fx._popup(body.centerx, body.top - 8, "VIDA CHEIA", (214, 172, 78))
+        return False
+    game.herbs_held -= 1
+    game.player.health = min(game.player.max_health, game.player.health + HERB_HEAL)
+    game.fx._burst(body.centerx, body.centery, 0, (86, 168, 72), (214, 172, 78), 14, speed=4.0)
+    game.fx._popup(body.centerx, body.top - 8, f"+{HERB_HEAL}", (168, 220, 120))
+    audio.play_herb()
+    return True
+
+
 def _separate(player, enemy) -> None:
     """Empurra jogador e inimigo para lados opostos quando os corpos se sobrepõem."""
     if player.hurtbox.centerx <= enemy.hurtbox.centerx:
@@ -41,6 +88,31 @@ def _separate(player, enemy) -> None:
     else:
         player.rect.x += 10
         enemy.rect.x -= 14
+
+
+def _on_enemy_slain(game, playing, enemy) -> bool:
+    """Rugido, onda de onças ou vitória. True se o estado da sessão mudou."""
+    game.player.roar()
+    if getattr(game.player, "_roar_fx", False):
+        game.fx.yaguar_roar(game.player)
+        game.player._roar_fx = False
+    if isinstance(enemy, SpectralJaguar):
+        game.jaguars_defeated += 1
+        if game.jaguars_defeated < ONCA_WAVE_TOTAL:
+            playing.current_zone = _onca_zone_label(game.jaguars_defeated)
+            game.spawn_spectral_jaguar()
+        else:
+            game.player.has_garra_espiritual = True
+            enemy.kill()
+            game.begin_forest_crossing()
+            playing.current_zone = "Floresta — o caminho se abre"
+            return True
+    elif isinstance(enemy, MapinguariBoss):
+        game.change_state(VictoryCinematicState())
+        enemy.kill()
+        return True
+    enemy.kill()
+    return False
 
 
 def _defeat_player(game) -> bool:
@@ -65,18 +137,37 @@ def _respawn_from_fall(game) -> None:
     game.fx.player_hurt(game.player.hurtbox.centerx, game.player.hurtbox.centery, TRAIL_FALL_DAMAGE, False)
 
 
+def _smooth_aim_look(game) -> None:
+    """Look-ahead vertical suave; não dá snap."""
+    player = game.player
+    if getattr(player, "bow_state", None):
+        target_y = math.sin(getattr(player, "aim_angle", 0.0)) * 36.0
+    else:
+        target_y = 0.0
+    prev = float(getattr(game, "cam_look_y", 0.0))
+    game.cam_look_y = prev + (target_y - prev) * 0.16
+
+
 def _follow_camera(game) -> None:
     """Câmera lateral com look-ahead: o guerreiro fica ~40% da tela ao avançar."""
+    _smooth_aim_look(game)
     facing = getattr(game.player, "facing", 1)
+    look_x = 0.0
+    if getattr(game.player, "bow_state", None):
+        look_x = math.cos(getattr(game.player, "aim_angle", 0.0)) * BOW_LOOKAHEAD
     anchor = CAMERA_ANCHOR_FWD if facing >= 0 else CAMERA_ANCHOR_BACK
     max_cam = max(0, FOREST_WORLD_WIDTH - SCREEN_WIDTH)
     cur = float(getattr(game, "camera_x", 0))
     screen_x = game.player.rect.centerx - cur
     ratio = screen_x / SCREEN_WIDTH if SCREEN_WIDTH else 0.5
     lo, hi = anchor - CAMERA_DEADZONE, anchor + CAMERA_DEADZONE
-    if lo <= ratio <= hi and 0 < cur < max_cam:
-        return
-    target = game.player.rect.centerx - SCREEN_WIDTH * anchor
+    if not getattr(game.player, "bow_state", None):
+        if lo <= ratio <= hi and 0 < cur < max_cam:
+            return
+    target = game.player.rect.centerx - SCREEN_WIDTH * anchor + look_x
+    margin = 110
+    px = game.player.rect.centerx
+    target = max(px - (SCREEN_WIDTH - margin), min(px - margin, target))
     target = max(0.0, min(float(max_cam), float(target)))
     game.camera_x = cur + (target - cur) * CAMERA_LERP
 
@@ -118,10 +209,58 @@ def _draw_fendas_debug(game, screen) -> None:
     p = game.player
     lines = (
         f"world_x={p.rect.centerx}  cam={cam}  feet={p.rect.bottom}",
-        f"vel_y={p.vel_y:.1f}  {p.air_state}  F3",
+        f"vel_y={p.vel_y:.1f}  {p.air_state}  bow={p.bow_state}  F3",
     )
     for i, text in enumerate(lines):
         screen.blit(font.render(text, True, (245, 240, 210)), (16, SCREEN_HEIGHT - 48 + i * 16))
+
+
+def _draw_combat_debug(game, screen) -> None:
+    """F3: ângulo, spawn, flechas, hurtboxes e look-ahead. Nunca no modo normal."""
+    cam = int(getattr(game, "camera_x", 0))
+    ox, oy = game.fx.ox - cam, game.fx.oy
+    font = pygame.font.SysFont("consolas", 13)
+    p = game.player
+    pygame.draw.rect(screen, (80, 220, 120), p.hurtbox.move(ox, oy), 1)
+    ax, ay = p.bow_anchor()
+    pygame.draw.circle(screen, (255, 200, 80), (int(ax + ox), int(ay + oy)), 4, 1)
+    sx, sy = p.arrow_spawn()
+    pygame.draw.circle(screen, (255, 80, 80), (int(sx + ox), int(sy + oy)), 3)
+    if p.bow_state:
+        length = 48
+        ex = sx + math.cos(p.aim_angle) * length
+        ey = sy + math.sin(p.aim_angle) * length
+        pygame.draw.line(screen, (242, 214, 132), (sx + ox, sy + oy), (ex + ox, ey + oy), 1)
+        for tx, ty in p.trajectory_preview():
+            pygame.draw.circle(screen, (200, 180, 90), (int(tx + ox), int(ty + oy)), 2)
+        look = math.cos(p.aim_angle) * BOW_LOOKAHEAD
+        pygame.draw.line(
+            screen,
+            (120, 180, 255),
+            (p.rect.centerx + ox, 8),
+            (p.rect.centerx + look + ox, 8),
+            2,
+        )
+    for enemy in game.enemies:
+        pygame.draw.rect(screen, (220, 70, 70), enemy.hurtbox.move(ox, oy), 1)
+        weak = getattr(enemy, "weak_hurtbox", None)
+        if weak is not None:
+            pygame.draw.rect(screen, (255, 210, 40), weak.move(ox, oy), 1)
+    for proj in game.projectiles:
+        if isinstance(proj, Arrow):
+            pygame.draw.rect(screen, (255, 140, 60), proj.tip_rect().move(ox, oy), 1)
+            pygame.draw.line(
+                screen,
+                (180, 220, 255),
+                (proj.prev_x + ox, proj.prev_y + oy),
+                (proj.fx + ox, proj.fy + oy),
+                1,
+            )
+    info = (
+        f"state={p.bow_state}  ang={math.degrees(p.aim_angle):.0f}  "
+        f"charge={p.bow_charge:.2f}  cam={cam}"
+    )
+    screen.blit(font.render(info, True, (245, 240, 210)), (16, 8))
 
 
 class GameState:
@@ -247,30 +386,47 @@ class PlayingState(GameState):
             game.debug_draw = not getattr(game, "debug_draw", False)
             return
 
+        if event.type == pygame.KEYDOWN and event.key == KEY_COLOR_COMPARE:
+            from src.color_profile import toggle_raw_bow_color
+
+            toggle_raw_bow_color()
+            game.player._set_pose(getattr(game.player, "_pose_name", "idle"))
+            return
+
         if event.type == pygame.MOUSEBUTTONDOWN:
-            if event.button == 1:
-                game.player.queue_attack(heavy=False)
-            elif event.button == 3:
+            if event.button == MOUSE_ATTACK:
+                if not game.player.bow_state:
+                    game.player.queue_attack(heavy=False)
+            elif event.button == MOUSE_HEAVY:
                 game.player.queue_attack(heavy=True)
 
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_j:
-            game.player.queue_attack(heavy=False)
+        if event.type == pygame.KEYDOWN and event.key == KEY_ATTACK:
+            if not game.player.bow_state:
+                game.player.queue_attack(heavy=False)
 
         if event.type == pygame.KEYDOWN and event.key == pygame.K_e:
-            collected = pygame.sprite.spritecollide(game.player, game.herbs, True)
-            if collected:
-                game.herbs_collected += len(collected)
-                game.player.health = min(game.player.max_health, game.player.health + 25)
+            near = _herbs_in_reach(game.player, game.herbs)
+            if near and getattr(game, "herbs_held", 0) < TOTAL_HERBS_TO_COLLECT:
+                _pickup_herbs(game, near)
+            else:
+                _use_sacred_herb(game)
 
     def update(self, game):
         keys = pygame.key.get_pressed()
         mouse_pressed = pygame.mouse.get_pressed()
+        dt = max(1e-4, min(0.05, float(getattr(game, "dt", 1.0 / FPS))))
 
         # Jogador e hitboxes da lança
-        game.player.update(keys, mouse_pressed)
+        game.player.camera_x = getattr(game, "camera_x", 0)
+        game.player.update(keys, mouse_pressed, dt)
         if getattr(game.player, "_roar_fx", False):
             game.fx.yaguar_roar(game.player)
             game.player._roar_fx = False
+        arrow = game.player.pop_arrow()
+        if arrow:
+            game.projectiles.add(arrow)
+            sx, sy = arrow.fx, arrow.fy
+            game.fx._burst(sx, sy, game.player.facing, (236, 228, 210), (168, 118, 52), 4, speed=2.4)
         strike = game.player.pop_strike()
         if strike:
             game.attack_hitboxes.add(strike)
@@ -297,16 +453,51 @@ class PlayingState(GameState):
                 if log:
                     game.projectiles.add(log)
 
-        game.projectiles.update()
-        for log in list(game.projectiles):
-            if log.rect.colliderect(game.player.hurtbox):
-                blocked = game.player.blocking
-                dealt = game.player.take_damage(log.damage, log.rect.centerx)
-                if dealt:
-                    game.fx.player_hurt(game.player.hurtbox.centerx, game.player.hurtbox.centery, dealt, blocked)
-                log.kill()
-                if _defeat_player(game):
-                    return
+        for proj in list(game.projectiles):
+            if getattr(proj, "friendly", False) or isinstance(proj, Arrow):
+                proj.update(dt)
+                if getattr(proj, "world_hit", False):
+                    proj.world_hit = False
+                    game.fx.arrow_impact(proj.fx, proj.fy, 0, 0, flesh=False)
+                    audio.play_arrow_hit("rock")
+                    continue
+                if getattr(proj, "spent", False):
+                    continue
+                for enemy in list(game.enemies):
+                    reaction = enemy.on_projectile_approach(proj)
+                    if reaction == "dodge":
+                        continue
+                    if reaction == "deflect":
+                        proj.deflect()
+                        break
+                    hit, weak = proj.try_hit_enemy(enemy)
+                    if not hit:
+                        continue
+                    dmg = proj.resolve_hit(weak)
+                    if dmg:
+                        enemy.take_hit(dmg, game.player.hurtbox.centerx)
+                        game.fx.arrow_impact(
+                            enemy.hurtbox.centerx,
+                            enemy.hurtbox.centery,
+                            game.player.facing,
+                            dmg,
+                            flesh=True,
+                        )
+                        audio.play_arrow_hit("flesh")
+                        if enemy.health <= 0:
+                            if _on_enemy_slain(game, self, enemy):
+                                return
+                    break
+            else:
+                proj.update()
+                if proj.rect.colliderect(game.player.hurtbox):
+                    blocked = game.player.blocking
+                    dealt = game.player.take_damage(proj.damage, proj.rect.centerx)
+                    if dealt:
+                        game.fx.player_hurt(game.player.hurtbox.centerx, game.player.hurtbox.centery, dealt, blocked)
+                    proj.kill()
+                    if _defeat_player(game):
+                        return
 
         # Lança do jogador contra hurtboxes inimigas
         for hb in list(game.attack_hitboxes):
@@ -317,30 +508,13 @@ class PlayingState(GameState):
                     game.fx.hit_enemy(enemy.hurtbox.centerx, enemy.hurtbox.centery, game.player.facing, hb.damage, heavy)
                     hb.kill()
                     if enemy.health <= 0:
-                        game.player.roar()
-                        if getattr(game.player, "_roar_fx", False):
-                            game.fx.yaguar_roar(game.player)
-                            game.player._roar_fx = False
-                        if isinstance(enemy, SpectralJaguar):
-                            game.jaguars_defeated += 1
-                            if game.jaguars_defeated < ONCA_WAVE_TOTAL:
-                                self.current_zone = _onca_zone_label(game.jaguars_defeated)
-                                game.spawn_spectral_jaguar()
-                            else:
-                                game.player.has_garra_espiritual = True
-                                enemy.kill()
-                                game.begin_forest_crossing()
-                                self.current_zone = "Floresta — o caminho se abre"
-                                return
-                        elif isinstance(enemy, MapinguariBoss):
-                            game.change_state(VictoryCinematicState())
-                        enemy.kill()
+                        if _on_enemy_slain(game, self, enemy):
+                            return
                     break
 
-        collected = pygame.sprite.spritecollide(game.player, game.herbs, True)
-        if collected:
-            game.herbs_collected += len(collected)
-            game.player.health = min(game.player.max_health, game.player.health + 25)
+        near = _herbs_in_reach(game.player, game.herbs)
+        if near:
+            _pickup_herbs(game, near)
 
         # Contato corpo a corpo: dano de empurrão, exceto no meio do ataque do jogador
         for enemy in list(game.enemies):
@@ -374,6 +548,8 @@ class PlayingState(GameState):
                 self.current_zone = "Caminho da Montanha Sagrada"
                 game.change_state(BossCinematicState(self))
                 return
+        else:
+            _smooth_aim_look(game)
 
         game.fx.tick_flashes(game.all_sprites)
         game.fx.tick_spear_magic(game.player)
@@ -383,7 +559,8 @@ class PlayingState(GameState):
 
     def draw(self, game, screen):
         cam = int(getattr(game, "camera_x", 0))
-        focus = (game.player.rect.centerx - cam, GROUND_Y - 90)
+        look_y = float(getattr(game, "cam_look_y", 0.0))
+        focus = (game.player.rect.centerx - cam, GROUND_Y - 90 + look_y)
         game.parallax.draw_back(screen, focus, cam)
         if game.zone_stage >= 2 and not game.parallax.is_boss_arena():
             game.parallax.draw_corrupt_veil(screen)
@@ -391,6 +568,7 @@ class PlayingState(GameState):
         ox, oy = game.fx.ox - cam, game.fx.oy
         for herb in game.herbs:
             screen.blit(herb.image, herb.rect.move(ox, oy))
+        game.fx.draw_contact_shadow(screen, game.player, (ox, oy))
         for spr in game.all_sprites:
             if (
                 spr is game.player
@@ -401,16 +579,27 @@ class PlayingState(GameState):
             ):
                 continue
             blit_flashed(screen, spr, (ox, oy))
+        if game.player.bow_state:
+            game.player.draw_bow(screen, (ox, oy))
         game.fx.draw_spear_magic(screen, game.player, cam)
         for proj in game.projectiles:
             screen.blit(proj.image, proj.rect.move(ox, oy))
+        if game.player.bow_state:
+            game.player.draw_reticle(screen, cam, (ox, oy))
 
         game.fx.draw_world(screen, cam)
         game.fx.draw_veils(screen)
         game.parallax.draw_front(screen, focus)
         self.hud.draw(game, screen, self.current_zone)
-        if getattr(game, "debug_draw", False) and game.zone_stage == 1:
-            _draw_fendas_debug(game, screen)
+        if getattr(game, "debug_draw", False):
+            _draw_combat_debug(game, screen)
+            if game.zone_stage == 1:
+                _draw_fendas_debug(game, screen)
+        from src.color_profile import using_raw_bow_color
+
+        if using_raw_bow_color():
+            font = pygame.font.SysFont("georgia", 16)
+            screen.blit(font.render("F4  arco ORIGINAL", True, (242, 214, 132)), (16, SCREEN_HEIGHT - 24))
 
 
 class PauseState(GameState):

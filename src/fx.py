@@ -121,6 +121,18 @@ class CombatFX:
         self.hitstop = max(self.hitstop, 4)
         self.hurt_veil = max(self.hurt_veil, 14)
 
+    def arrow_impact(self, x: float, y: float, facing: int, damage: int, flesh: bool = True) -> None:
+        """Impacto da flecha: discreto, sem o shake forte da lança."""
+        if flesh:
+            self._burst(x, y, facing, SPIRIT, (255, 255, 255), 8, speed=3.4)
+            self._popup(x, y - 22, f"-{int(damage)}", COLOR_GOLD_BRIGHT)
+            self.shake = max(self.shake, 2)
+            self.hitstop = max(self.hitstop, 1)
+            self.hit_veil = max(self.hit_veil, 3)
+        else:
+            self._burst(x, y, 0, (160, 150, 130), (90, 80, 70), 5, speed=2.2)
+            self.shake = max(self.shake, 1)
+
     def yaguar_roar(self, player) -> None:
         """Explosão espiritual na lança no instante do rugido."""
         _hand, tip = player.spear_axis()
@@ -356,6 +368,21 @@ class CombatFX:
             veil = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
             veil.fill((255, 240, 200, int(28 * (self.hit_veil / 6))))
             screen.blit(veil, (0, 0))
+
+    def draw_contact_shadow(self, screen: pygame.Surface, sprite, offset: tuple[int, int]) -> None:
+        """Elipse suave nos pés quando o sprite está no chão — ancora no cenário."""
+        if not getattr(sprite, "on_ground", False):
+            return
+        ox, oy = offset
+        feet = sprite.rect.midbottom
+        width, height = 56, 14
+        surf = pygame.Surface((width, height), pygame.SRCALPHA)
+        pygame.draw.ellipse(surf, (10, 16, 12, 72), (0, 0, width, height))
+        pygame.draw.ellipse(surf, (8, 12, 10, 36), (8, 3, width - 16, height - 5))
+        screen.blit(
+            surf,
+            (int(feet[0] + ox - width // 2), int(feet[1] + oy - height // 2 + 1)),
+        )
 
 
 def blit_flashed(screen: pygame.Surface, sprite: pygame.sprite.Sprite, offset: tuple[int, int]) -> None:

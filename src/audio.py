@@ -18,6 +18,7 @@ CINEMATIC_TRACK = ASSETS_DIR / "cinematic_animation" / "epic_music01.mp3"
 MAPINGUARI_ROAR = ASSETS_DIR / "sfx" / "MapinguariRugido01.mp3"
 YAGUAR_ROAR = ASSETS_DIR / "sfx" / "roarYaguar01.mp3"
 ONCA_ROAR = ASSETS_DIR / "sfx" / "roarOnca.mp3"
+HERB_SFX = ASSETS_DIR / "sfx" / "sfx_herb.wav"
 
 _current: str | None = None
 _sounds: dict[str, pygame.mixer.Sound] = {}
@@ -93,6 +94,38 @@ def play_yaguar_roar() -> None:
 def play_onca_roar() -> None:
     """Rugido da onça espectral ao surgir; não sobrepõe se o clipe ainda estiver tocando."""
     _play_sfx_once("onca_roar", ONCA_ROAR, 0.86)
+
+
+def play_herb() -> None:
+    """Colher ou usar a erva sagrada."""
+    _play_sfx_once("herb", HERB_SFX, 0.72)
+
+
+def play_bow_release() -> None:
+    """Soltar a corda. Só toca se o arquivo existir — não inventa caminho."""
+    for name, rel, vol in (
+        ("bow_release", "sfx/bow_release.wav", 0.72),
+        ("bow_release_mp3", "sfx/bow_release.mp3", 0.72),
+        ("spear_standin", "sfx/sfx_spear.wav", 0.48),
+    ):
+        path = ASSETS_DIR / rel
+        if path.is_file():
+            _play_sfx_once(name, path, vol)
+            return
+
+
+def play_arrow_hit(kind: str = "flesh") -> None:
+    """Impacto da flecha. Silêncio se o clipe ainda não estiver no pacote."""
+    names = {
+        "flesh": ("sfx/arrow_hit_flesh.wav", "sfx/arrow_hit_flesh.mp3"),
+        "wood": ("sfx/arrow_hit_wood.wav", "sfx/arrow_hit_wood.mp3"),
+        "rock": ("sfx/arrow_hit_rock.wav", "sfx/arrow_hit_rock.mp3"),
+    }
+    for rel in names.get(kind, names["flesh"]):
+        path = ASSETS_DIR / rel
+        if path.is_file():
+            _play_sfx_once(f"arrow_hit_{kind}", path, 0.7)
+            return
 
 
 def _play_sfx_once(name: str, path: Path, volume: float) -> None:

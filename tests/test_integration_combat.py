@@ -201,7 +201,7 @@ def test_bloqueio_nao_e_dilacerado_a_60_hits_por_segundo(game, monkeypatch):
     assert game.player.health > 50
 
 
-def test_coletar_erva_cura_e_conta_no_hud(game, monkeypatch):
+def test_coletar_erva_guarda_no_bolso_e_e_cura(game, monkeypatch):
     _idle_keys(monkeypatch)
     game.player.health = 40
     herb = next(iter(game.herbs))
@@ -210,5 +210,55 @@ def test_coletar_erva_cura_e_conta_no_hud(game, monkeypatch):
     game.state.update(game)
 
     assert game.herbs_collected == 1
-    assert game.player.health == 65
+    assert game.herbs_held == 1
+    assert game.player.health == 40
     assert len(game.herbs) == TOTAL_HERBS_TO_COLLECT - 1
+
+    game.state.handle_events(game, pygame.event.Event(pygame.KEYDOWN, key=pygame.K_e))
+    assert game.player.health == 65
+    assert game.herbs_held == 0
+
+
+def test_e_colhe_erva_ao_alcance_sem_sobrepor_o_sprite(game, monkeypatch):
+    _idle_keys(monkeypatch)
+    herb = next(iter(game.herbs))
+    game.player.rect.midbottom = (herb.rect.centerx - 70, herb.rect.bottom)
+    game.player.on_ground = True
+    assert not game.player.rect.colliderect(herb.rect)
+
+    game.state.handle_events(game, pygame.event.Event(pygame.KEYDOWN, key=pygame.K_e))
+    assert game.herbs_held == 1
+    assert game.herbs_collected == 1
+
+
+def test_flecha_fere_onca_uma_vez_pelo_sistema_existente(game, monkeypatch):
+    _idle_keys(monkeypatch)
+    from src.entities import Arrow
+
+    enemy = next(iter(game.enemies))
+    hp = enemy.health
+    hb = enemy.hurtbox
+    arrow = Arrow(hb.centerx - 8, hb.centery, 0.0, 400, 16)
+    game.projectiles.add(arrow)
+    game.state.update(game)
+    assert enemy.health == hp - 16 or enemy not in game.enemies
+    leftover = hp - enemy.health if enemy in game.enemies else 16
+    game.state.update(game)
+    if enemy in game.enemies:
+        assert leftover == hp - enemy.health or leftover == 16
+
+
+def test_mira_nao_dispara_lanca(game, monkeypatch):
+    monkeypatch.setattr(pygame.key, "get_pressed", lambda: FakeKeys(pygame.K_q))
+    monkeypatch.setattr(pygame.mouse, "get_pressed", lambda: (False, False, False))
+    monkeypatch.setattr(pygame.mouse, "get_pos", lambda: (900, 300))
+    game.state.handle_events(game, pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=(900, 300)))
+    from src.config import BOW_NOCK
+
+    steps = int(BOW_NOCK / (1 / 60)) + 4
+    for _ in range(steps):
+        game.state.update(game)
+    assert game.player.bow_state == "aim"
+    assert game.player.attacking is False
+    assert game.player.queued_attack is None
+

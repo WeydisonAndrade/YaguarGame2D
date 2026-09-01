@@ -5,6 +5,7 @@ menores que o sprite, para o corpo não coincidir com folhas e penas.
 """
 import math
 import random
+from pathlib import Path
 import pygame
 from src import audio
 from src.config import (
@@ -29,8 +30,25 @@ from src.config import (
     ONCA_WALK_SPEED,
     ONCA_RUN_SPEED,
     ONCA_RUN_DISTANCE,
+    KEY_BOW_AIM,
+    KEY_ATTACK,
+    MOUSE_ATTACK_HELD,
+    BOW_AIM_SPEED,
+    BOW_MAX_CHARGE,
+    BOW_NOCK,
+    BOW_RECOVER,
+    BOW_MIN_SPEED,
+    BOW_MAX_SPEED,
+    BOW_GRAVITY,
+    BOW_DAMAGE_MIN,
+    BOW_DAMAGE_MAX,
+    BOW_WEAK_MULT,
+    BOW_LIFETIME,
+    BOW_STUCK_TIME,
+    FPS,
 )
-from src.player_anim import load_player_frames
+from src.color_profile import using_raw_bow_color
+from src.player_anim import load_player_frames, POSE_ANCHORS, RAW_BOW_SURFACES
 
 
 _world_platforms = PLATFORMS
@@ -96,6 +114,66 @@ def _pose_from_base(base: pygame.Surface, sx: float, sy: float) -> pygame.Surfac
     return pygame.transform.smoothscale(base, (w, h))
 
 
+_ARROW_SURF: pygame.Surface | None = None
+
+
+def _arrow_image() -> pygame.Surface:
+    """Flecha isolada no estilo do trigger01, na escala do personagem."""
+    global _ARROW_SURF
+    from src import player_anim
+
+    if player_anim.SCALED_ARROW is not None:
+        return player_anim.SCALED_ARROW
+    if _ARROW_SURF is not None:
+        return _ARROW_SURF
+    for path in (Path("assets/player/arrow_color_corrected.png"), Path("assets/player/arrow.png")):
+        if path.is_file():
+            _ARROW_SURF = pygame.image.load(str(path)).convert_alpha()
+            return _ARROW_SURF
+    surf = pygame.Surface((34, 12), pygame.SRCALPHA)
+    pygame.draw.polygon(surf, (214, 208, 190), [(0, 3), (5, 6), (0, 9)])
+    pygame.draw.rect(surf, (118, 74, 32), (4, 4, 20, 4))
+    pygame.draw.rect(surf, (168, 122, 58), (5, 5, 18, 2))
+    pygame.draw.polygon(surf, (196, 196, 204), [(22, 1), (34, 6), (22, 11)])
+    pygame.draw.polygon(surf, (150, 150, 158), [(22, 3), (30, 6), (22, 9)])
+    _ARROW_SURF = surf
+    return surf
+
+
+# Empunhadura do arco pintado no sprite (facing direita), relativa aos pés (midbottom).
+# Medido nos PNGs de assets/player — a flecha sai deste ponto, não de um overlay.
+BOW_HAND_OFFSET = {
+    "idle": (20.0, -95.0),
+    "run1": (30.0, -90.0),
+    "run2": (26.0, -90.0),
+    "jump": (28.0, -74.0),
+    "crouch": (32.0, -68.0),
+    "defend": (22.0, -94.0),
+    "attack": (28.0, -110.0),
+    "bow": (96.5, -129.0),
+    "bow_nock": (88.0, -118.0),
+    "bow_quiver": (70.0, -110.0),
+}
+
+
+def _aim_from_gamepad(origin: tuple[float, float]) -> tuple[float, float] | None:
+    """Analógico direito, se houver controle. None se não houver ou estiver no morto."""
+    try:
+        if not pygame.joystick.get_init():
+            pygame.joystick.init()
+        if pygame.joystick.get_count() <= 0:
+            return None
+        pad = pygame.joystick.Joystick(0)
+        if pad.get_numaxes() < 4:
+            return None
+        rx, ry = pad.get_axis(2), pad.get_axis(3)
+        if math.hypot(rx, ry) < 0.32:
+            return None
+        return origin[0] + rx * 260.0, origin[1] + ry * 260.0
+    except pygame.error:
+        return None
+
+
 class GameObject(pygame.sprite.Sprite):
     """Sprite simples com imagem e âncora no midbottom (pés no chão)."""
 
@@ -109,7 +187,7 @@ class GameObject(pygame.sprite.Sprite):
 
 
 class YaguarPlayer(pygame.sprite.Sprite):
-    """Protagonista: andar, correr, pular, agachar, bloquear e atacar com a lança."""
+    """Protagonista: andar, correr, pular, agachar, bloquear, lança e arco."""
 
     def __init__(self, x, y):
         super().__init__()
@@ -145,6 +223,19 @@ class YaguarPlayer(pygame.sprite.Sprite):
         self.spear_magic = 0    # Frames de encantamento da lança após o rugido
         self._roar_fx = False
         self._jump_held = False
+        # Arco — estados na mesma máquina (None, nock, aim, draw, shoot, recover)
+        self.bow_state = None
+        self.bow_charge = 0.0
+        self.bow_recover = 0.0
+        self.bow_nock = 0.0
+        self.aim_angle = 0.0
+        self.aim_world = (float(x), float(y))
+        self.camera_x = 0.0
+        self.pending_arrow = None
+        self.arrow_ammo = None  # None = ilimitado (protótipo)
+        self._bow_fire_held = False
+        self._bow_need_release = False
+        self._pose_name = "idle"
 
     @property
     def hurtbox(self) -> pygame.Rect:
@@ -154,14 +245,19 @@ class YaguarPlayer(pygame.sprite.Sprite):
 
     def _set_pose(self, name: str) -> None:
         """Troca o frame e espelha se estiver virado para a esquerda, mantendo os pés."""
-        frame = self.frames.get(name, self.frames["idle"])
+        self._pose_name = name if name in self.frames else "idle"
+        if using_raw_bow_color() and self._pose_name in RAW_BOW_SURFACES:
+            frame = RAW_BOW_SURFACES[self._pose_name]
+        else:
+            frame = self.frames.get(self._pose_name, self.frames["idle"])
         if self.facing < 0:
             frame = pygame.transform.flip(frame, True, False)
         midbottom = self.rect.midbottom
         self.image = frame
         self.rect = self.image.get_rect(midbottom=midbottom)
 
-    def update(self, keys, mouse_pressed):
+    def update(self, keys, mouse_pressed, dt: float = 1.0 / FPS):
+        dt = max(1e-4, min(0.05, float(dt)))
         # Timers de cooldown, invulnerabilidade e duração do golpe
         if self.attack_cooldown > 0:
             self.attack_cooldown -= 1
@@ -172,16 +268,39 @@ class YaguarPlayer(pygame.sprite.Sprite):
             if self.attack_timer <= 0:
                 self.attacking = False
 
+        fire_held = bool(mouse_pressed[MOUSE_ATTACK_HELD] if mouse_pressed else False) or bool(keys[KEY_ATTACK])
+        # A/D viram antes do arco, para o disparo sair no lado certo no mesmo quadro.
+        if not self.attacking:
+            left = bool(keys[pygame.K_a] or keys[pygame.K_LEFT])
+            right = bool(keys[pygame.K_d] or keys[pygame.K_RIGHT])
+            if left and not right:
+                self.facing = -1
+            elif right and not left:
+                self.facing = 1
+        self._update_bow(keys, fire_held, dt)
+
         # Recupera fôlego quando não está sprintando
         if self.stamina < self.max_stamina and not (keys[pygame.K_LSHIFT] and not self.crouching):
             self.stamina = min(self.max_stamina, self.stamina + 0.28)
 
-        if self.queued_attack and not self.attacking:
+        if self.queued_attack and not self.attacking and not self.bow_state:
             self._begin_attack(heavy=self.queued_attack == "heavy")
             self.queued_attack = None
+        elif self.queued_attack and self.bow_state:
+            self.queued_attack = None
 
-        self.blocking = bool(keys[pygame.K_k] or keys[pygame.K_LCTRL]) and not self.attacking
-        self.crouching = bool(keys[pygame.K_s] or keys[pygame.K_DOWN]) and self.on_ground and not self.attacking
+        aiming = self.bow_state in ("nock", "aim", "draw")
+        self.blocking = (
+            bool(keys[pygame.K_k] or keys[pygame.K_LCTRL])
+            and not self.attacking
+            and not self.bow_state
+        )
+        self.crouching = (
+            bool(keys[pygame.K_s] or keys[pygame.K_DOWN])
+            and self.on_ground
+            and not self.attacking
+            and not aiming
+        )
 
         # Movimento horizontal: A/D ou setas; Shift corre e gasta stamina
         dx = 0
@@ -191,10 +310,20 @@ class YaguarPlayer(pygame.sprite.Sprite):
             if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
                 dx += 1
 
-        running = dx != 0 and not self.attacking and (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]) and self.stamina > 1
+        running = (
+            dx != 0
+            and not self.attacking
+            and not aiming
+            and (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT])
+            and self.stamina > 1
+        )
         speed = PLAYER_RUN_SPEED if running else PLAYER_WALK_SPEED
         if self.attacking:
             speed *= 0.45
+        if aiming:
+            speed *= BOW_AIM_SPEED
+        if self.bow_state in ("shoot", "recover"):
+            speed *= 0.28
         if running:
             self.stamina = max(0, self.stamina - 0.35)
 
@@ -205,7 +334,14 @@ class YaguarPlayer(pygame.sprite.Sprite):
             if not self.attacking:
                 self.facing = 1 if dx > 0 else -1
             self.rect.x += int(dx * speed)
-        if want_jump and self.on_ground and not self.crouching and not self.blocking and not self.attacking:
+        if (
+            want_jump
+            and self.on_ground
+            and not self.crouching
+            and not self.blocking
+            and not self.attacking
+            and self.bow_state not in ("shoot", "recover")
+        ):
             self.vel_y = JUMP_VELOCITY
             self.on_ground = False
 
@@ -219,9 +355,11 @@ class YaguarPlayer(pygame.sprite.Sprite):
             self.air_state = "falling"
         self._try_spawn_strike()
 
-        # Pose visual segundo a ação atual
+        # Pose visual: Q saca a flecha da aljava, encaixa e só então puxa a corda.
         self.anim_tick += 1
-        if self.attacking:
+        if self.bow_state:
+            self._set_pose(self._bow_pose_name())
+        elif self.attacking:
             self._set_pose("attack")
         elif self.blocking:
             self._set_pose("defend")
@@ -238,11 +376,192 @@ class YaguarPlayer(pygame.sprite.Sprite):
 
     def queue_attack(self, heavy=False) -> None:
         """Enfileira lança (leve) ou Garra Espiritual (pesado, se desbloqueada)."""
-        if self.attack_cooldown > 0 or self.blocking:
+        if self.attack_cooldown > 0 or self.blocking or self.bow_state:
             return
         if heavy and not self.has_garra_espiritual:
             return
         self.queued_attack = "heavy" if heavy else "light"
+
+    def _on_vine(self) -> bool:
+        return bool(getattr(self, "on_vine", False) or getattr(self, "swinging", False))
+
+    def _refresh_aim(self, keys=None) -> None:
+        """O tiro segue o lado para o qual Yáguar está virado (A/D), não o mouse."""
+        mx, my = pygame.mouse.get_pos()
+        cam = float(getattr(self, "camera_x", 0) or 0)
+        world = (mx + cam, float(my))
+        hand = self.bow_anchor()
+        pad = _aim_from_gamepad(hand)
+        if pad is not None:
+            world = pad
+            dx = pad[0] - hand[0]
+            if abs(dx) > 40:
+                self.facing = 1 if dx > 0 else -1
+        self.aim_world = world
+
+        if keys is not None:
+            left = bool(keys[pygame.K_a] or keys[pygame.K_LEFT])
+            right = bool(keys[pygame.K_d] or keys[pygame.K_RIGHT])
+            if left and not right:
+                self.facing = -1
+            elif right and not left:
+                self.facing = 1
+        self.aim_angle = 0.0 if self.facing > 0 else math.pi
+
+    def bow_anchor(self) -> tuple[float, float]:
+        """Ponta da flecha na pose atual do arco, ou empunhadura nas outras poses."""
+        pose = self._bow_pose_name() if self.bow_state else getattr(self, "_pose_name", "idle")
+        ox, oy = POSE_ANCHORS.get(pose) or BOW_HAND_OFFSET.get(pose, BOW_HAND_OFFSET["idle"])
+        return self.rect.centerx + ox * self.facing, self.rect.bottom + oy
+
+    def arrow_spawn(self) -> tuple[float, float]:
+        """A flecha sai da ponta da que ele já segura na pose."""
+        return self.bow_anchor()
+
+    def _cancel_bow(self) -> None:
+        self.bow_state = None
+        self.bow_charge = 0.0
+        self.bow_recover = 0.0
+        self.bow_nock = 0.0
+        self._bow_fire_held = False
+
+    def _begin_nock(self) -> None:
+        """Tira a flecha da aljava e encaixa na corda antes de mirar."""
+        if "bow_quiver" in self.frames or "bow_nock" in self.frames:
+            self.bow_state = "nock"
+            self.bow_nock = BOW_NOCK
+            self.bow_charge = 0.0
+            return
+        self.bow_state = "aim"
+        self.bow_nock = 0.0
+        self.bow_charge = 0.0
+
+    def _bow_pose_name(self) -> str:
+        """Frame do arco: aljava → nock → corda puxada."""
+        if self.bow_state == "nock":
+            if self.bow_nock > BOW_NOCK * 0.5 and "bow_quiver" in self.frames:
+                return "bow_quiver"
+            if "bow_nock" in self.frames:
+                return "bow_nock"
+        elif self.bow_state == "aim" and "bow_nock" in self.frames:
+            return "bow_nock"
+        if "bow" in self.frames:
+            return "bow"
+        return "idle"
+
+    def _update_bow(self, keys, fire_held: bool, dt: float) -> None:
+        want_aim = bool(keys[KEY_BOW_AIM]) and self.health > 0
+        if self._on_vine() or self.attacking:
+            if self.bow_state in ("nock", "aim", "draw"):
+                self._cancel_bow()
+            return
+
+        if self.bow_state in ("shoot", "recover"):
+            self.bow_recover -= dt
+            if self.bow_state == "shoot" and self.bow_recover <= BOW_RECOVER * 0.55:
+                self.bow_state = "recover"
+            if self.bow_recover <= 0:
+                if want_aim:
+                    self._begin_nock()
+                else:
+                    self.bow_state = None
+                self.bow_charge = 0.0
+            if want_aim:
+                self._refresh_aim(keys)
+            return
+
+        if not want_aim:
+            if self.bow_state in ("nock", "aim", "draw"):
+                self._cancel_bow()
+            return
+
+        self._refresh_aim(keys)
+        if self.bow_state is None:
+            self._begin_nock()
+            self._bow_need_release = fire_held
+            self._bow_fire_held = fire_held
+            return
+
+        if self.bow_state == "nock":
+            self.bow_nock -= dt
+            if self._bow_need_release and not fire_held:
+                self._bow_need_release = False
+            self._bow_fire_held = fire_held
+            if self.bow_nock <= 0:
+                self.bow_state = "aim"
+                self.bow_charge = 0.0
+            return
+
+        if self._bow_need_release:
+            if not fire_held:
+                self._bow_need_release = False
+            fire_held = False
+
+        if fire_held:
+            self.bow_state = "draw"
+            self.bow_charge = min(1.0, self.bow_charge + dt / BOW_MAX_CHARGE)
+        elif self._bow_fire_held and self.bow_state in ("aim", "draw"):
+            self._release_arrow()
+        else:
+            self.bow_state = "aim"
+        self._bow_fire_held = fire_held
+
+    def _release_arrow(self) -> None:
+        if self.pending_arrow is not None:
+            return
+        if self.arrow_ammo is not None:
+            if self.arrow_ammo <= 0:
+                self.bow_state = "aim"
+                self.bow_charge = 0.0
+                return
+            self.arrow_ammo -= 1
+        charge = max(0.0, min(1.0, self.bow_charge))
+        speed = BOW_MIN_SPEED + charge * (BOW_MAX_SPEED - BOW_MIN_SPEED)
+        damage = int(round(BOW_DAMAGE_MIN + charge * (BOW_DAMAGE_MAX - BOW_DAMAGE_MIN)))
+        sx, sy = self.arrow_spawn()
+        sx += math.cos(self.aim_angle) * 6.0
+        sy += math.sin(self.aim_angle) * 6.0
+        self.pending_arrow = Arrow(sx, sy, self.aim_angle, speed, damage, owner="player")
+        self.rect.x -= self.facing * 4
+        self.bow_state = "shoot"
+        self.bow_recover = BOW_RECOVER
+        self.bow_charge = 0.0
+        self._bow_need_release = True
+        audio.play_bow_release()
+
+    def pop_arrow(self) -> "Arrow | None":
+        arrow = self.pending_arrow
+        self.pending_arrow = None
+        return arrow
+
+    def trajectory_preview(self, steps: int = 7, step_dt: float = 0.045) -> list[tuple[float, float]]:
+        """Pontos discretos da queda inicial — só para debug."""
+        charge = max(0.0, min(1.0, self.bow_charge))
+        speed = BOW_MIN_SPEED + charge * (BOW_MAX_SPEED - BOW_MIN_SPEED)
+        x, y = self.arrow_spawn()
+        vx = math.cos(self.aim_angle) * speed
+        vy = math.sin(self.aim_angle) * speed
+        pts = []
+        for _ in range(steps):
+            vy += BOW_GRAVITY * step_dt
+            x += vx * step_dt
+            y += vy * step_dt
+            pts.append((x, y))
+        return pts
+
+    def draw_bow(self, screen: pygame.Surface, offset: tuple[float, float]) -> None:
+        """A pose de tiro já traz arco e flecha; não desenha um segundo conjunto."""
+        return
+
+    def draw_reticle(self, screen: pygame.Surface, cam_x: float, offset: tuple[float, float]) -> None:
+        if self.bow_state not in ("aim", "draw"):
+            return
+        ox, oy = offset
+        wx, wy = self.aim_world
+        cx, cy = int(wx + ox), int(wy + oy)
+        color = (242, 214, 132)
+        pygame.draw.circle(screen, color, (cx, cy), 4, 1)
+        pygame.draw.circle(screen, color, (cx, cy), 1)
 
     def roar(self) -> None:
         """Rugido do guerreiro: encanta a lança com brilho espiritual."""
@@ -316,6 +635,7 @@ class YaguarPlayer(pygame.sprite.Sprite):
             self.invuln = PLAYER_INVULN_FRAMES
             self.flash_timer = 12
             self.flash_color = (255, 48, 36)
+            self._cancel_bow()
         return amount
 
 
@@ -362,6 +682,15 @@ class BaseEnemy(GameObject):
         self.flash_color = (255, 240, 210)
         push = KNOCKBACK + 6 if source_x < self.hurtbox.centerx else -(KNOCKBACK + 6)
         self.rect.x += push
+
+    @property
+    def weak_hurtbox(self) -> pygame.Rect | None:
+        """Ponto fraco opcional. None = só a hurtbox normal."""
+        return None
+
+    def on_projectile_approach(self, projectile) -> str:
+        """Hook futuro (Curupira): 'hit', 'deflect' ou 'dodge'."""
+        return "hit"
 
     def move_towards(self, target_pos):
         """Anda no eixo X em direção ao alvo, respeitando stun e gravidade."""
@@ -427,6 +756,13 @@ class SpectralJaguar(BaseEnemy):
     def hurtbox(self) -> pygame.Rect:
         w, h = int(96 * ONCA_SCALE), int(78 * ONCA_SCALE)
         return pygame.Rect(self.rect.centerx - w // 2, self.rect.bottom - h, w, h)
+
+    @property
+    def weak_hurtbox(self) -> pygame.Rect | None:
+        """Cabeça da onça — só a flecha usa o multiplicador."""
+        hb = self.hurtbox
+        w, h = 30, 22
+        return pygame.Rect(hb.centerx - w // 2, hb.top - 6, w, h)
 
     def _set_pose(self, name: str) -> None:
         frame = self.frames.get(name, self.frames["idle"])
@@ -522,6 +858,8 @@ class TreeTrunk(pygame.sprite.Sprite):
         self.rect = self.image.get_rect(center=(int(self.fx), int(self.fy)))
         self.damage = 12
         self.life = 160
+        self.owner = "enemy"
+        self.friendly = False
 
     def update(self, *args):
         self.fx += self.vx
@@ -534,6 +872,122 @@ class TreeTrunk(pygame.sprite.Sprite):
             or self.rect.left > SCREEN_WIDTH + 40
             or self.rect.bottom < -40
             or self.rect.top > SCREEN_HEIGHT + 40
+        ):
+            self.kill()
+
+
+class Arrow(pygame.sprite.Sprite):
+    """Flecha do Yáguar: a mesma da pose, voo linear em dt, ponta como collider."""
+
+    friendly = True
+    can_be_intercepted = True
+
+    def __init__(self, x: float, y: float, angle: float, speed: float, damage: int, owner: str = "player"):
+        super().__init__()
+        self.owner = owner
+        self.fx = float(x)
+        self.fy = float(y)
+        self.prev_x = self.fx
+        self.prev_y = self.fy
+        self.vx = math.cos(angle) * speed
+        self.vy = math.sin(angle) * speed
+        self.damage = int(damage)
+        self.life = BOW_LIFETIME
+        self.spent = False
+        self.stuck = False
+        self.stuck_life = BOW_STUCK_TIME
+        self.world_hit = False
+        self._base = _arrow_image()
+        self.image = self._base
+        self.rect = self.image.get_rect(center=(int(self.fx), int(self.fy)))
+        self._orient()
+
+    def flight_segment(self) -> tuple[tuple[float, float], tuple[float, float]]:
+        return (self.prev_x, self.prev_y), (self.fx, self.fy)
+
+    def tip_rect(self) -> pygame.Rect:
+        speed = math.hypot(self.vx, self.vy) or 1.0
+        nose = max(8.0, self._base.get_width() * 0.48)
+        tx = self.fx + self.vx / speed * nose
+        ty = self.fy + self.vy / speed * nose
+        return pygame.Rect(int(tx) - 3, int(ty) - 3, 7, 7)
+
+    def _orient(self) -> None:
+        ang = -math.degrees(math.atan2(self.vy, self.vx))
+        self.image = pygame.transform.rotate(self._base, ang)
+        self.rect = self.image.get_rect(center=(int(self.fx), int(self.fy)))
+
+    def _stick(self, duration: float | None = None) -> None:
+        self.stuck = True
+        self.spent = True
+        self.vx = 0.0
+        self.vy = 0.0
+        self.stuck_life = BOW_STUCK_TIME if duration is None else duration
+
+    def deflect(self, scale: float = 0.55) -> None:
+        """Hook para o Curupira desviar o projétil no futuro."""
+        self.vx *= -scale
+        self.vy = -abs(self.vy) * 0.45
+        self.owner = "deflected"
+        self._orient()
+
+    def _hit_world(self) -> bool:
+        p0, p1 = self.flight_segment()
+        tip = self.tip_rect()
+        for plat in platform_rects():
+            if plat.clipline(p0, p1) or plat.colliderect(tip):
+                return True
+        return False
+
+    def try_hit_enemy(self, enemy) -> tuple[bool, bool]:
+        """True se o segmento ou a ponta acertou. Segundo valor = ponto fraco."""
+        if self.spent or self.stuck:
+            return False, False
+        p0, p1 = self.flight_segment()
+        tip = self.tip_rect()
+        weak = getattr(enemy, "weak_hurtbox", None)
+        if weak is not None and (weak.clipline(p0, p1) or weak.colliderect(tip)):
+            return True, True
+        hb = enemy.hurtbox
+        if hb.clipline(p0, p1) or hb.colliderect(tip):
+            return True, False
+        return False, False
+
+    def resolve_hit(self, weak: bool = False) -> int:
+        """Marca impacto único e devolve o dano (com multiplicador de ponto fraco)."""
+        if self.spent:
+            return 0
+        dmg = self.damage
+        if weak:
+            dmg = int(round(dmg * BOW_WEAK_MULT))
+        self._stick(0.28)
+        return dmg
+
+    def update(self, dt: float = 1.0 / FPS, *args):
+        if isinstance(dt, pygame.sprite.Group):
+            dt = 1.0 / FPS
+        dt = max(1e-4, min(0.05, float(dt)))
+        if self.stuck:
+            self.stuck_life -= dt
+            if self.stuck_life <= 0:
+                self.kill()
+            return
+        self.prev_x, self.prev_y = self.fx, self.fy
+        self.vy += BOW_GRAVITY * dt
+        self.fx += self.vx * dt
+        self.fy += self.vy * dt
+        self.life -= dt
+        self._orient()
+        if self._hit_world():
+            self._stick()
+            self.world_hit = True
+            return
+        if (
+            self.life <= 0
+            or self.fx < -80
+            or self.fx > _world_width + 80
+            or self.fy < -80
+            or self.fy > SCREEN_HEIGHT + 120
         ):
             self.kill()
 

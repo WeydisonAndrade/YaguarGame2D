@@ -67,11 +67,12 @@ Menu  →  Cinemática  →  Partida  →  Pausa
 4. No lado direito das fendas abre a cinemática; em seguida surge o **Mapinguari**.
 5. Derrotar o chefe conclui a prova.
 
-Três **ervas sagradas** estão no chão. Andar sobre elas (ou `E`) cura **25** de vida, até o máximo de 100.
+Três **ervas sagradas** estão no chão. Andar perto (ou `E` junto delas) **colhe** para o bolso. Com uma erva guardada, `E` cura **25** de vida, até o máximo de 100.
 
 ### Combate
 
 - **Lança** (golpe leve): hitbox só na janela ativa do ataque. A cada 10 golpes, Yáguar **ruge** e encanta a lança por alguns instantes.
+- **Arco**: segure `Q` para sacar e mirar. `A`/`D` viram o disparo; `J` ou clique esquerdo puxa a corda e soltar dispara. A flecha tem o tamanho da pose, voo **linear**. Carga aumenta velocidade e dano. Flechas ilimitadas neste protótipo.
 - **Garra Espiritual** (golpe pesado): mais alcance e dano; só depois da terceira onça.
 - **Defesa**: reduz o dano a 22% e ganha uma recuperação curta (não é invencível; ainda passa chip).
 - **I-frames** após hit sem bloqueio. Vida não desce abaixo de zero; HP 0 vai para a derrota, inclusive se o golpe for só a hitbox da onça (sem encostar o corpo).
@@ -90,10 +91,12 @@ Três **ervas sagradas** estão no chão. Andar sobre elas (ou `E`) cura **25** 
 | Correr | `Shift` (gasta fôlego) |
 | Pular | `W`, `↑` ou `Espaço` |
 | Agachar | `S` ou `↓` |
-| Ataque com lança | `J` ou clique esquerdo |
+| Ataque com lança | `J` ou clique esquerdo (sem o arco sacado) |
+| Arco / mira | Segurar `Q` |
+| Disparo do arco | `J` ou clique esquerdo com `Q` preso; soltar dispara |
 | Garra espiritual | Clique direito (após a 3ª onça) |
 | Defesa ancestral | `K` ou `Ctrl` |
-| Ervas sagradas | `E` (também coleta ao encostar) |
+| Ervas sagradas | `E` usa uma erva do bolso (+25 HP). Andar perto colhe. |
 | Pausar | `ESC` ou `P` |
 
 ---

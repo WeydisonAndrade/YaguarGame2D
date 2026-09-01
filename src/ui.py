@@ -461,7 +461,7 @@ class RitualHUD:
     def draw(self, game, screen: pygame.Surface, zone: str) -> None:
         """Placa do jogador, nome da zona e barras de vida dos inimigos."""
         self._draw_player_plate(game, screen)
-        self._draw_chrome(screen, zone)
+        self._draw_chrome(game, screen, zone)
         self._draw_challenge(game, screen)
         self._draw_enemy_bars(game, screen)
 
@@ -517,7 +517,7 @@ class RitualHUD:
             ticks=5,
         )
 
-        self._draw_herb_slots(screen, plate.x + 16, plate.y + 88, game.herbs_collected)
+        self._draw_herb_slots(screen, plate.x + 16, plate.y + 88, getattr(game, "herbs_held", game.herbs_collected))
         self._draw_garra_seal(screen, plate.right - 118, plate.y + 86, player.has_garra_espiritual)
 
     def _draw_bar(
@@ -574,8 +574,11 @@ class RitualHUD:
         if unlocked:
             pygame.draw.circle(screen, color, (x - 10, y + 10), 4)
 
-    def _draw_chrome(self, screen: pygame.Surface, zone: str) -> None:
-        hint = self.font_hint.render("ESC  pausar", True, COLOR_PARCHMENT)
+    def _draw_chrome(self, game, screen: pygame.Surface, zone: str) -> None:
+        hint_text = "Q  arco    ESC  pausar"
+        if getattr(game, "herbs_held", 0) > 0:
+            hint_text = "Q  arco    E  erva    ESC  pausar"
+        hint = self.font_hint.render(hint_text, True, COLOR_PARCHMENT)
         banner = self.font_zone.render(zone, True, COLOR_GOLD_LEAF)
         screen.blit(banner, (32, 136))
         screen.blit(hint, (SCREEN_WIDTH - hint.get_width() - 18, 18))
