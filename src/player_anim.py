@@ -756,7 +756,9 @@ def load_player_frames() -> dict[str, pygame.Surface]:
         if not path.is_file():
             path = raw_path
         img = Image.open(path).convert("RGBA")
-        if name != "crouch":
+        # Pulo e agacho já saem na altura do asset (168 / 140). Escalar o pulo
+        # pelo "corpo" infla o sprite: o cocar é mais estreito e a pose é recolhida.
+        if name not in ("crouch", "jump"):
             before = _silhouette_body_height(img)
             img = _scale_body_to(img, ref_body, crisp=name in BOW_GRADE_POSES)
             if name == "bow" and before:

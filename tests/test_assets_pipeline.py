@@ -123,6 +123,16 @@ def test_pose_de_pulo_nao_muda_hurtbox():
     assert player.rect.midbottom[1] == GROUND_Y
 
 
+def test_pose_de_pulo_fica_na_escala_dos_outros_assets():
+    from src.player_anim import load_player_frames
+
+    frames = load_player_frames()
+    idle_h = frames["idle"].get_height()
+    jump_h = frames["jump"].get_height()
+    assert abs(jump_h - idle_h) <= 4
+    assert jump_h <= idle_h
+
+
 def test_parallax_carrega_camadas_sem_quebrar_cena():
     from src.parallax import ParallaxBackground
 

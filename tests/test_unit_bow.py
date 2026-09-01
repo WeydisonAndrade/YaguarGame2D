@@ -310,7 +310,7 @@ def test_poses_em_pe_mantem_o_tamanho_do_corpo():
     idle = frames["idle"]
     idle_img = Image.frombytes("RGBA", idle.get_size(), pygame.image.tobytes(idle, "RGBA"))
     ref = _silhouette_body_height(idle_img)
-    for name in ("run1", "run2", "jump", "attack", "defend", "bow", "bow_quiver", "bow_nock"):
+    for name in ("run1", "run2", "attack", "defend", "bow", "bow_quiver", "bow_nock"):
         if name not in frames:
             continue
         surf = frames[name]
