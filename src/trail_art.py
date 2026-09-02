@@ -1,8 +1,8 @@
-"""Pintura das fendas e o mundo contínuo: floresta → clareira → areia.
+"""Pintura das fendas e o mundo contínuo: floresta → clareira → areia → floresta.
 
 O erro de 'duas imagens unidas' vinha de colar a clareira deslocada (céu no meio
 da tela), tapar o topo com um vale de outra pintura e empilhar fades. Aqui cada
-clareira é a própria arte, reenquadrada no chão jogável, e a junta é só um
+trecho é a própria arte, reenquadrada no chão jogável, e a junta é só um
 crossfade curto entre dois quadros completos.
 """
 
@@ -13,14 +13,16 @@ from pathlib import Path
 from PIL import Image, ImageEnhance, ImageFilter, ImageStat
 
 from src.config import (
+    CONTINUE_DRAW_X,
+    CONTINUE_SRC_GROUND_Y,
     FOREST_WORLD_WIDTH,
     GROUND_Y,
     SAND_ART_GROUND_Y,
-    SAND_ORIGIN_X,
+    SAND_DRAW_X,
     SAND_PLATFORMS,
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
-    TRAIL_ORIGIN_X,
+    TRAIL_DRAW_X,
     TRAIL_PLATFORMS,
 )
 
@@ -29,6 +31,7 @@ PARALLAX_DIR = ASSETS_DIR / "parallax"
 TRAIL_PATH = PARALLAX_DIR / "forest_trail.png"
 CROSSING_PATH = PARALLAX_DIR / "forest_crossing.png"
 SAND_PATH = PARALLAX_DIR / "forest_sand_fendas.png"
+CONTINUE_PATH = PARALLAX_DIR / "forest_sand_continue.png"
 
 PLAY_SOURCES = (
     PARALLAX_DIR / "forest_fendas_clean.png",
@@ -228,7 +231,7 @@ def ensure_trail_art(force: bool = False) -> Path:
 
 
 def _append_sand(world: Image.Image) -> None:
-    """A areia é o quadro seguinte: mesma altura de chão, crossfade na junta."""
+    """A areia sobrepõe a última árvore da clareira: mesmo chão, costura curta."""
     if not SAND_PATH.is_file():
         raise FileNotFoundError(
             "Este asset não existe atualmente no projeto: parallax/forest_sand_fendas.png"
@@ -237,11 +240,22 @@ def _append_sand(world: Image.Image) -> None:
     if sand.size != (SCREEN_WIDTH, SCREEN_HEIGHT):
         sand = _cover_crop(sand, SCREEN_WIDTH, SCREEN_HEIGHT)
     sand = _frame_to_ground(sand, SAND_ART_GROUND_Y)
-    _crossfade(world, sand, SAND_ORIGIN_X, 88)
+    _crossfade(world, sand, SAND_DRAW_X, 72)
+
+
+def _append_continue(world: Image.Image) -> None:
+    """A floresta depois da areia: chão na mesma linha, crossfade na última árvore da clareira."""
+    if not CONTINUE_PATH.is_file():
+        raise FileNotFoundError(
+            "Este asset não existe atualmente no projeto: parallax/forest_sand_continue.png"
+        )
+    art = Image.open(CONTINUE_PATH).convert("RGB")
+    art = _frame_to_ground(art, CONTINUE_SRC_GROUND_Y)
+    _crossfade(world, art, CONTINUE_DRAW_X, 72)
 
 
 def build_crossing_world() -> Path:
-    """Monta o strip: três telas completas, juntas em crossfade, sem carimbo de vale no céu."""
+    """Monta o strip: quatro telas completas, juntas em crossfade, sem carimbo de vale no céu."""
     ensure_trail_art(force=True)
     if not FOREST_NEAR.is_file():
         raise FileNotFoundError("Este asset não existe atualmente no projeto: parallax/forest1.png")
@@ -252,10 +266,11 @@ def build_crossing_world() -> Path:
 
     world = Image.new("RGB", (FOREST_WORLD_WIDTH, SCREEN_HEIGHT), (22, 36, 28))
     world.paste(left, (0, 0))
-    _crossfade(world, trail, TRAIL_ORIGIN_X, 110)
+    _crossfade(world, trail, TRAIL_DRAW_X, 72)
     _haze_gaps(world, valley, TRAIL_PLATFORMS)
     _append_sand(world)
     _haze_gaps(world, valley, SAND_PLATFORMS)
+    _append_continue(world)
 
     PARALLAX_DIR.mkdir(parents=True, exist_ok=True)
     world.save(CROSSING_PATH, "PNG")
@@ -270,6 +285,7 @@ def _crossing_sources() -> list[Path]:
         FENDAS_FAR,
         TRAIL_PATH,
         SAND_PATH,
+        CONTINUE_PATH,
         Path(__file__),
         Path(__file__).with_name("config.py"),
     ]

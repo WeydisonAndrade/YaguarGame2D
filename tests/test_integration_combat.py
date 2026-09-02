@@ -89,7 +89,9 @@ def test_queda_na_clareira_fere_e_devolve_ao_checkpoint(game, monkeypatch):
     game.begin_forest_crossing()
     start = game.player.health
     game.player.checkpoint = (TRAIL_CHECKPOINT_X, TRAIL_GROUND_Y)
-    game.player.rect.midbottom = (TRAIL_ORIGIN_X + 330, TRAIL_GROUND_Y + 40)
+    from src.config import TRAIL_A_X, TRAIL_GAP_1_WIDTH, TRAIL_PLATFORM_A_WIDTH
+    gap_x = TRAIL_A_X + TRAIL_PLATFORM_A_WIDTH + TRAIL_GAP_1_WIDTH // 2
+    game.player.rect.midbottom = (gap_x, TRAIL_GROUND_Y + 40)
     game.player.vel_y = 12
     game.player.on_ground = False
 
@@ -134,12 +136,12 @@ def test_queda_na_areia_fere_e_devolve_ao_checkpoint(game, monkeypatch):
 
 
 def test_camera_nao_ultrapassa_o_fim_do_mundo(game, monkeypatch):
-    """Na areia a câmera segue o Yáguar sem sair do strip de 3 telas."""
-    from src.config import FOREST_WORLD_WIDTH, SAND_ORIGIN_X
+    """Na areia a câmera segue o Yáguar sem sair do strip contínuo."""
+    from src.config import FOREST_WORLD_WIDTH, SAND_A_X
 
     _idle_keys(monkeypatch)
     game.begin_forest_crossing()
-    game.player.rect.midbottom = (SAND_ORIGIN_X + 100, GROUND_Y)
+    game.player.rect.midbottom = (SAND_A_X + 100, GROUND_Y)
     game.player.facing = 1
     game.player.on_ground = True
     game.player.vel_y = 0
@@ -169,9 +171,11 @@ def test_caminho_aberto_permite_voltar_a_arena(game, monkeypatch):
 
 def test_camera_deixa_o_caminho_a_frente_visivel(game, monkeypatch):
     """Ao avançar, Yáguar fica à esquerda do centro para a clareira aparecer primeiro."""
+    from src.config import TRAIL_B_X
+
     _idle_keys(monkeypatch)
     game.begin_forest_crossing()
-    game.player.rect.midbottom = (1200, GROUND_Y)
+    game.player.rect.midbottom = (TRAIL_B_X + 40, GROUND_Y)
     game.player.facing = 1
     game.player.on_ground = True
     game.player.vel_y = 0
@@ -184,9 +188,11 @@ def test_camera_deixa_o_caminho_a_frente_visivel(game, monkeypatch):
 
 
 def test_desenha_a_clareira_das_fendas_com_debug(game, monkeypatch):
+    from src.config import TRAIL_A_X
+
     _idle_keys(monkeypatch)
     game.begin_forest_crossing()
-    game.player.rect.midbottom = (TRAIL_ORIGIN_X + 90, GROUND_Y)
+    game.player.rect.midbottom = (TRAIL_A_X + 90, GROUND_Y)
     game.player.on_ground = True
     game.debug_draw = True
     game.state.update(game)

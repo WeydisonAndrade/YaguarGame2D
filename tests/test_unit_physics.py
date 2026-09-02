@@ -147,6 +147,8 @@ def test_clareira_continua_o_chao_da_arena():
     assert all(box[1] == GROUND_Y for box in FOREST_CROSSING_PLATFORMS)
     arena = FOREST_CROSSING_PLATFORMS[0]
     assert arena[0] + arena[2] == TRAIL_ORIGIN_X
+    from src.config import TRAIL_PLATFORM_A_WIDTH, TRAIL_SEAM_OVERLAP
+    assert TRAIL_SEAM_OVERLAP <= TRAIL_PLATFORM_A_WIDTH
 
     set_physics_world(FOREST_CROSSING_PLATFORMS, FOREST_WORLD_WIDTH, allow_pits=True)
     try:
@@ -179,12 +181,16 @@ def test_clareira_continua_na_areia():
         FOREST_WORLD_WIDTH,
         PLATFORMS,
         SAND_A_X,
+        SAND_DRAW_X,
         SAND_ORIGIN_X,
         TRAIL_C_X,
         TRAIL_PLATFORM_C_WIDTH,
     )
 
-    assert TRAIL_C_X + TRAIL_PLATFORM_C_WIDTH == SAND_ORIGIN_X == SAND_A_X
+    assert TRAIL_C_X + TRAIL_PLATFORM_C_WIDTH == SAND_ORIGIN_X
+    assert SAND_A_X == SAND_DRAW_X
+    from src.config import SAND_PLATFORM_A_WIDTH, SAND_SEAM_OVERLAP
+    assert SAND_SEAM_OVERLAP <= SAND_PLATFORM_A_WIDTH
     set_physics_world(FOREST_CROSSING_PLATFORMS, FOREST_WORLD_WIDTH, allow_pits=True)
     try:
         rect = pygame.Rect(0, 0, 92, 168)
@@ -284,5 +290,31 @@ def test_fendas_da_areia_engolem_no_mundo_continuo():
             rect.midbottom = ((prev.right + nxt.left) // 2, TRAIL_GROUND_Y)
             _, _, grounded = apply_gravity_and_platforms(rect, 0.0, True)
             assert grounded is False, f"andou sobre a fenda {prev.right}–{nxt.left}"
+    finally:
+        set_physics_world(PLATFORMS, SCREEN_WIDTH, allow_pits=False)
+
+
+def test_areia_continua_na_floresta_seguinte():
+    """A última laje da areia encosta na floresta contínua, sem degrau nem buraco."""
+    from src.config import (
+        CONTINUE_A_X,
+        CONTINUE_ORIGIN_X,
+        FOREST_CROSSING_PLATFORMS,
+        FOREST_WORLD_WIDTH,
+        PLATFORMS,
+        SAND_C_X,
+        SAND_PLATFORM_C_WIDTH,
+    )
+
+    assert SAND_C_X + SAND_PLATFORM_C_WIDTH == CONTINUE_ORIGIN_X == CONTINUE_A_X
+    set_physics_world(FOREST_CROSSING_PLATFORMS, FOREST_WORLD_WIDTH, allow_pits=True)
+    try:
+        rect = pygame.Rect(0, 0, 92, 168)
+        rect.midbottom = (CONTINUE_ORIGIN_X, GROUND_Y)
+        _, _, grounded = apply_gravity_and_platforms(rect, 0.0, True)
+        assert grounded is True
+        rect.midbottom = (CONTINUE_ORIGIN_X + 480, GROUND_Y)
+        _, _, grounded = apply_gravity_and_platforms(rect, 0.0, True)
+        assert grounded is True
     finally:
         set_physics_world(PLATFORMS, SCREEN_WIDTH, allow_pits=False)

@@ -93,7 +93,7 @@ class Game:
             audio.play_onca_roar()
 
     def begin_forest_crossing(self) -> None:
-        """Abre o caminho à direita: clareira e areia continuam a mesma floresta."""
+        """Abre o caminho à direita: clareira, areia e a floresta seguinte no mesmo mundo."""
         if self.zone_stage == 1:
             return
         self.zone_stage = 1

@@ -71,6 +71,7 @@ def test_sprites_essenciais_existem_no_pacote():
     assert (ASSETS / "parallax" / "forest_trail.png").is_file()
     assert (ASSETS / "parallax" / "forest_crossing.png").is_file()
     assert (ASSETS / "parallax" / "forest_sand_fendas.png").is_file()
+    assert (ASSETS / "parallax" / "forest_sand_continue.png").is_file()
 
 
 def test_clareira_e_pintura_estatica():
@@ -87,7 +88,7 @@ def test_clareira_e_pintura_estatica():
 def test_mundo_da_travessia_e_continuo():
     from PIL import Image
 
-    from src.config import FOREST_WORLD_WIDTH, TRAIL_ORIGIN_X
+    from src.config import FOREST_WORLD_WIDTH, TRAIL_DRAW_X
     from src.trail_art import CROSSING_PATH, ensure_crossing_world
 
     ensure_crossing_world()
@@ -95,7 +96,7 @@ def test_mundo_da_travessia_e_continuo():
     assert world.mode == "RGB"
     assert world.size == (FOREST_WORLD_WIDTH, SCREEN_HEIGHT)
     # A costura não pode ser um corte vertical de cor sólida.
-    seam = TRAIL_ORIGIN_X
+    seam = TRAIL_DRAW_X
     left = list(world.getpixel((seam - 8, 80)))
     right = list(world.getpixel((seam + 8, 80)))
     delta = sum(abs(a - b) for a, b in zip(left, right))
@@ -106,13 +107,13 @@ def test_travessia_nao_repete_a_floresta_da_arena():
     """O trecho à direita não é uma cópia lado a lado de forest1."""
     from PIL import Image
 
-    from src.config import FOREST_WORLD_WIDTH
+    from src.config import FOREST_WORLD_WIDTH, TRAIL_DRAW_X
     from src.trail_art import CROSSING_PATH, ensure_crossing_world
 
     ensure_crossing_world()
     world = Image.open(CROSSING_PATH)
     a = world.getpixel((180, 360))
-    b = world.getpixel((180 + SCREEN_WIDTH, 360))
+    b = world.getpixel((TRAIL_DRAW_X + 480, 360))
     delta = sum(abs(x - y) for x, y in zip(a, b))
     assert delta > 40
     assert world.size[0] == FOREST_WORLD_WIDTH
@@ -121,15 +122,39 @@ def test_travessia_nao_repete_a_floresta_da_arena():
 def test_mundo_da_travessia_termina_na_areia():
     from PIL import Image
 
-    from src.config import FOREST_WORLD_WIDTH, SAND_ORIGIN_X, SAND_WORLD_WIDTH, TRAIL_WORLD_WIDTH
+    from src.config import FOREST_WORLD_WIDTH, SAND_DRAW_X, SAND_ORIGIN_X, TRAIL_WORLD_WIDTH
     from src.trail_art import CROSSING_PATH, ensure_crossing_world
 
     ensure_crossing_world()
     world = Image.open(CROSSING_PATH)
-    assert world.size == (SAND_WORLD_WIDTH, SCREEN_HEIGHT)
-    assert FOREST_WORLD_WIDTH == SAND_WORLD_WIDTH
+    assert world.size[0] == FOREST_WORLD_WIDTH
     assert SAND_ORIGIN_X == TRAIL_WORLD_WIDTH
-    seam = SAND_ORIGIN_X
+    seam = SAND_DRAW_X
+    left = list(world.getpixel((seam - 8, 80)))
+    right = list(world.getpixel((seam + 8, 80)))
+    delta = sum(abs(a - b) for a, b in zip(left, right))
+    assert delta < 110
+
+
+def test_mundo_continua_depois_da_ultima_clareira():
+    """A quarta tela começa na última árvore da areia, sem corte seco."""
+    from PIL import Image
+
+    from src.config import (
+        CONTINUE_DRAW_X,
+        CONTINUE_ORIGIN_X,
+        CONTINUE_WORLD_WIDTH,
+        FOREST_WORLD_WIDTH,
+        SAND_WORLD_WIDTH,
+    )
+    from src.trail_art import CROSSING_PATH, ensure_crossing_world
+
+    ensure_crossing_world()
+    world = Image.open(CROSSING_PATH)
+    assert CONTINUE_ORIGIN_X == SAND_WORLD_WIDTH
+    assert FOREST_WORLD_WIDTH == CONTINUE_WORLD_WIDTH
+    assert world.size == (CONTINUE_WORLD_WIDTH, SCREEN_HEIGHT)
+    seam = CONTINUE_DRAW_X
     left = list(world.getpixel((seam - 8, 80)))
     right = list(world.getpixel((seam + 8, 80)))
     delta = sum(abs(a - b) for a, b in zip(left, right))
