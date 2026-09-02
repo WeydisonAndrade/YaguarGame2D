@@ -68,6 +68,9 @@ MOUSE_HEAVY_HELD = 2               # índice em mouse.get_pressed()
 # Arco e flecha (tempos em segundos; a física da flecha usa dt)
 # ---------------------------------------------------------------------------
 BOW_AIM_SPEED = 0.52               # Fração da caminhada durante a mira
+BOW_AIM_PITCH_UP = 1.22            # ~70° acima da horizontal
+BOW_AIM_PITCH_DOWN = 0.92          # ~53° abaixo
+BOW_AIM_DEADZONE = 14              # px: evita tremer com o cursor na mão
 BOW_NOCK = 0.42                    # Sacar da aljava e encaixar a flecha
 BOW_MAX_CHARGE = 0.55
 BOW_RECOVER = 0.20

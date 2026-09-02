@@ -58,9 +58,8 @@ def test_sacar_arco_tira_a_flecha_da_aljava(monkeypatch):
     assert player.bow_state == "aim"
     assert player._pose_name == "bow_nock"
     assert player.facing == 1
-    keys = FakeKeys(KEY_BOW_AIM, pygame.K_a)
-    _aim(player, 800, player.hurtbox.centery, monkeypatch)
-    player.update(keys, (False, False, False), 1 / 60)
+    _aim(player, 40, player.hurtbox.centery, monkeypatch)
+    player.update(FakeKeys(KEY_BOW_AIM), (False, False, False), 1 / 60)
     assert player.facing == -1
 
 
@@ -86,38 +85,94 @@ def test_sacar_arco_entra_em_mira_e_vira_para_o_alvo(monkeypatch):
     _nock_until_aim(player, monkeypatch, 800, player.hurtbox.centery)
     assert player.bow_state == "aim"
     assert player.facing == 1
-    keys = FakeKeys(KEY_BOW_AIM, pygame.K_a)
-    _aim(player, 800, player.hurtbox.centery, monkeypatch)
-    player.update(keys, (False, False, False), 1 / 60)
+    _aim(player, 40, player.hurtbox.centery, monkeypatch)
+    player.update(FakeKeys(KEY_BOW_AIM), (False, False, False), 1 / 60)
     assert player.facing == -1
 
 
-def test_mira_nao_vira_pelo_mouse(monkeypatch):
-    """O cursor à direita não desvira quem já olha para a esquerda."""
+def test_mira_vira_pelo_mouse(monkeypatch):
+    """O cursor à esquerda vira o guerreiro e o ângulo do tiro."""
     player = YaguarPlayer(400, GROUND_Y)
-    player.facing = -1
     _nock_until_aim(player, monkeypatch, 900, player.hurtbox.centery)
+    assert player.facing == 1
+    _hold_bow(player, monkeypatch, 40, player.hurtbox.centery)
     assert player.facing == -1
-    assert abs(player.aim_angle - math.pi) < 0.05
+    assert abs(player.aim_angle - math.pi) < 0.35
+
+
+def test_mira_segue_o_cursor_para_cima(monkeypatch):
+    player = YaguarPlayer(200, GROUND_Y)
+    _nock_until_aim(player, monkeypatch, 700, player.hurtbox.centery)
+    hx, hy = player.bow_anchor()
+    _hold_bow(player, monkeypatch, 700, hy)
+    assert player.facing == 1
+    assert abs(player.aim_angle) < 0.2
+    _hold_bow(player, monkeypatch, 700, hy - 140)
+    assert player.aim_angle < -0.3
 
 
 def test_disparo_para_a_esquerda(monkeypatch):
     player = YaguarPlayer(400, GROUND_Y)
-    player.facing = -1
-    _nock_until_aim(player, monkeypatch, 900, player.hurtbox.centery)
-    _hold_bow(player, monkeypatch, 900, player.hurtbox.centery, fire=True)
-    _hold_bow(player, monkeypatch, 900, player.hurtbox.centery, fire=False)
+    _nock_until_aim(player, monkeypatch, 40, player.hurtbox.centery)
+    _hold_bow(player, monkeypatch, 40, player.hurtbox.centery, fire=True)
+    _hold_bow(player, monkeypatch, 40, player.hurtbox.centery, fire=False)
     arrow = player.pop_arrow()
     assert arrow is not None
     assert arrow.vx < 0
     assert arrow.fx < player.rect.centerx
 
-    player = YaguarPlayer(200, GROUND_Y)
-    _nock_until_aim(player, monkeypatch, 400, 80)
-    assert player.bow_state == "aim"
+
+def test_a_atira_para_a_esquerda_mesmo_com_o_mouse_a_direita(monkeypatch):
+    """Andar/olhar com A vira o disparo; o cursor à direita não prende o tiro."""
+    player = YaguarPlayer(400, GROUND_Y)
+    _nock_until_aim(player, monkeypatch, 900, player.hurtbox.centery)
     assert player.facing == 1
-    assert abs(player.aim_angle) < 0.01
-    assert player._pose_name == "bow_nock"
+    _aim(player, 900, player.hurtbox.centery, monkeypatch)
+    keys = FakeKeys(KEY_BOW_AIM, pygame.K_a)
+    player.update(keys, (True, False, False), 1 / 60)
+    player.update(keys, (False, False, False), 1 / 60)
+    arrow = player.pop_arrow()
+    assert arrow is not None
+    assert player.facing == -1
+    assert arrow.vx < 0
+
+
+def test_d_atira_para_a_direita_mesmo_com_o_mouse_a_esquerda(monkeypatch):
+    player = YaguarPlayer(400, GROUND_Y)
+    _nock_until_aim(player, monkeypatch, 40, player.hurtbox.centery)
+    assert player.facing == -1
+    _aim(player, 40, player.hurtbox.centery, monkeypatch)
+    keys = FakeKeys(KEY_BOW_AIM, pygame.K_d)
+    player.update(keys, (True, False, False), 1 / 60)
+    player.update(keys, (False, False, False), 1 / 60)
+    arrow = player.pop_arrow()
+    assert arrow is not None
+    assert player.facing == 1
+    assert arrow.vx > 0
+
+
+def test_cursor_na_mao_esquerda_nao_prende_o_angulo_a_direita(monkeypatch):
+    """A zona morta da mira não pode deixar o ângulo antigo (direita) no lugar."""
+    player = YaguarPlayer(400, GROUND_Y)
+    _nock_until_aim(player, monkeypatch, 900, player.hurtbox.centery)
+    player.facing = -1
+    player._set_pose("bow_nock")
+    hx, hy = player.bow_anchor()
+    _hold_bow(player, monkeypatch, hx, hy)
+    assert player.facing == -1
+    assert abs(player.aim_angle - math.pi) < 0.2
+
+
+def test_clique_esquerdo_dispara_sem_j(monkeypatch):
+    player = YaguarPlayer(200, GROUND_Y)
+    _nock_until_aim(player, monkeypatch, 800, player.hurtbox.centery)
+    keys = FakeKeys(KEY_BOW_AIM)
+    _aim(player, 800, player.hurtbox.centery, monkeypatch)
+    player.update(keys, (True, False, False), 1 / 60)
+    player.update(keys, (False, False, False), 1 / 60)
+    arrow = player.pop_arrow()
+    assert arrow is not None
+    assert arrow.vx > 0
 
 
 def test_movimento_reduz_durante_a_mira(monkeypatch):

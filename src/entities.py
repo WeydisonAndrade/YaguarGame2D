@@ -34,6 +34,9 @@ from src.config import (
     KEY_ATTACK,
     MOUSE_ATTACK_HELD,
     BOW_AIM_SPEED,
+    BOW_AIM_PITCH_UP,
+    BOW_AIM_PITCH_DOWN,
+    BOW_AIM_DEADZONE,
     BOW_MAX_CHARGE,
     BOW_NOCK,
     BOW_RECOVER,
@@ -269,7 +272,7 @@ class YaguarPlayer(pygame.sprite.Sprite):
                 self.attacking = False
 
         fire_held = bool(mouse_pressed[MOUSE_ATTACK_HELD] if mouse_pressed else False) or bool(keys[KEY_ATTACK])
-        # A/D viram antes do arco, para o disparo sair no lado certo no mesmo quadro.
+        # A/D (e setas) viram o corpo também com o arco: o disparo acompanha o lado.
         if not self.attacking:
             left = bool(keys[pygame.K_a] or keys[pygame.K_LEFT])
             right = bool(keys[pygame.K_d] or keys[pygame.K_RIGHT])
@@ -385,28 +388,67 @@ class YaguarPlayer(pygame.sprite.Sprite):
     def _on_vine(self) -> bool:
         return bool(getattr(self, "on_vine", False) or getattr(self, "swinging", False))
 
+    def _facing_from_keys(self, keys) -> int | None:
+        if keys is None:
+            return None
+        left = bool(keys[pygame.K_a] or keys[pygame.K_LEFT])
+        right = bool(keys[pygame.K_d] or keys[pygame.K_RIGHT])
+        if left and not right:
+            return -1
+        if right and not left:
+            return 1
+        return None
+
+    def _aim_angle_from_pitch(self, pitch: float) -> float:
+        """Mesma elevação nos dois lados: 0° à direita, 180° à esquerda."""
+        return pitch if self.facing > 0 else math.pi - pitch
+
+    def _align_aim_to_facing(self) -> None:
+        """A flecha não pode sair para o lado oposto ao que o corpo olha."""
+        going_right = math.cos(self.aim_angle) > 0
+        if self.facing < 0 and going_right:
+            self.aim_angle = math.pi - self.aim_angle
+        elif self.facing > 0 and not going_right:
+            self.aim_angle = math.pi - self.aim_angle
+
     def _refresh_aim(self, keys=None) -> None:
-        """O tiro segue o lado para o qual Yáguar está virado (A/D), não o mouse."""
+        """A/D viram o disparo; sem tecla, o cursor (ou o analógico) define o lado."""
         mx, my = pygame.mouse.get_pos()
         cam = float(getattr(self, "camera_x", 0) or 0)
         world = (mx + cam, float(my))
-        hand = self.bow_anchor()
-        pad = _aim_from_gamepad(hand)
+        torso = float(self.hurtbox.centerx)
+        pad = _aim_from_gamepad((torso, float(self.hurtbox.centery)))
         if pad is not None:
             world = pad
-            dx = pad[0] - hand[0]
-            if abs(dx) > 40:
-                self.facing = 1 if dx > 0 else -1
         self.aim_world = world
 
-        if keys is not None:
-            left = bool(keys[pygame.K_a] or keys[pygame.K_LEFT])
-            right = bool(keys[pygame.K_d] or keys[pygame.K_RIGHT])
-            if left and not right:
+        keyed = self._facing_from_keys(keys)
+        if keyed is not None:
+            self.facing = keyed
+        else:
+            margin = 28.0
+            if world[0] < torso - margin:
                 self.facing = -1
-            elif right and not left:
+            elif world[0] > torso + margin:
                 self.facing = 1
-        self.aim_angle = 0.0 if self.facing > 0 else math.pi
+
+        hand = self.bow_anchor()
+        dx = world[0] - hand[0]
+        dy = world[1] - hand[1]
+        if math.hypot(dx, dy) < BOW_AIM_DEADZONE:
+            self.aim_angle = self._aim_angle_from_pitch(0.0)
+            return
+        if abs(dx) < 4:
+            dx = 4.0 * self.facing
+        pitch = math.atan2(dy, abs(dx) if abs(dx) > 1 else 1.0)
+        pitch = max(-BOW_AIM_PITCH_UP, min(BOW_AIM_PITCH_DOWN, pitch))
+        self.aim_angle = self._aim_angle_from_pitch(pitch)
+
+    def _set_aim_cursor(self, aiming: bool) -> None:
+        try:
+            pygame.mouse.set_visible(not aiming)
+        except pygame.error:
+            pass
 
     def bow_anchor(self) -> tuple[float, float]:
         """Ponta da flecha na pose atual do arco, ou empunhadura nas outras poses."""
@@ -424,6 +466,7 @@ class YaguarPlayer(pygame.sprite.Sprite):
         self.bow_recover = 0.0
         self.bow_nock = 0.0
         self._bow_fire_held = False
+        self._set_aim_cursor(False)
 
     def _begin_nock(self) -> None:
         """Tira a flecha da aljava e encaixa na corda antes de mirar."""
@@ -465,6 +508,7 @@ class YaguarPlayer(pygame.sprite.Sprite):
                     self._begin_nock()
                 else:
                     self.bow_state = None
+                    self._set_aim_cursor(False)
                 self.bow_charge = 0.0
             if want_aim:
                 self._refresh_aim(keys)
@@ -480,6 +524,7 @@ class YaguarPlayer(pygame.sprite.Sprite):
             self._begin_nock()
             self._bow_need_release = fire_held
             self._bow_fire_held = fire_held
+            self._set_aim_cursor(True)
             return
 
         if self.bow_state == "nock":
@@ -518,6 +563,7 @@ class YaguarPlayer(pygame.sprite.Sprite):
         charge = max(0.0, min(1.0, self.bow_charge))
         speed = BOW_MIN_SPEED + charge * (BOW_MAX_SPEED - BOW_MIN_SPEED)
         damage = int(round(BOW_DAMAGE_MIN + charge * (BOW_DAMAGE_MAX - BOW_DAMAGE_MIN)))
+        self._align_aim_to_facing()
         sx, sy = self.arrow_spawn()
         sx += math.cos(self.aim_angle) * 6.0
         sy += math.sin(self.aim_angle) * 6.0
@@ -554,14 +600,22 @@ class YaguarPlayer(pygame.sprite.Sprite):
         return
 
     def draw_reticle(self, screen: pygame.Surface, cam_x: float, offset: tuple[float, float]) -> None:
-        if self.bow_state not in ("aim", "draw"):
+        """Cruzeta no cursor e anel de carga."""
+        if self.bow_state not in ("nock", "aim", "draw"):
             return
         ox, oy = offset
         wx, wy = self.aim_world
         cx, cy = int(wx + ox), int(wy + oy)
-        color = (242, 214, 132)
-        pygame.draw.circle(screen, color, (cx, cy), 4, 1)
-        pygame.draw.circle(screen, color, (cx, cy), 1)
+        gold = (242, 214, 132)
+        pygame.draw.circle(screen, gold, (cx, cy), 11, 1)
+        pygame.draw.line(screen, gold, (cx - 14, cy), (cx - 6, cy), 1)
+        pygame.draw.line(screen, gold, (cx + 6, cy), (cx + 14, cy), 1)
+        pygame.draw.line(screen, gold, (cx, cy - 14), (cx, cy - 6), 1)
+        pygame.draw.line(screen, gold, (cx, cy + 6), (cx, cy + 14), 1)
+        pygame.draw.circle(screen, gold, (cx, cy), 2)
+        if self.bow_state == "draw" and self.bow_charge > 0:
+            radius = 11 + int(10 * self.bow_charge)
+            pygame.draw.circle(screen, gold, (cx, cy), radius, 1)
 
     def roar(self) -> None:
         """Rugido do guerreiro: encanta a lança com brilho espiritual."""

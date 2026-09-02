@@ -266,7 +266,7 @@ def ensure_trail_art(force: bool = False) -> Path:
 
 
 def build_crossing_world() -> Path:
-    """Monta o strip 2048×600: floresta única + vale + clareira, sem tiling."""
+    """Monta o strip contínuo: floresta + vale + clareira, sem tiling."""
     ensure_trail_art()
     if not FOREST_NEAR.is_file():
         raise FileNotFoundError("Este asset não existe atualmente no projeto: parallax/forest1.png")

@@ -72,7 +72,7 @@ Três **ervas sagradas** estão no chão. Andar perto (ou `E` junto delas) **col
 ### Combate
 
 - **Lança** (golpe leve): hitbox só na janela ativa do ataque. A cada 10 golpes, Yáguar **ruge** e encanta a lança por alguns instantes.
-- **Arco**: segure `Q` para sacar e mirar. `A`/`D` viram o disparo; `J` ou clique esquerdo puxa a corda e soltar dispara. A flecha tem o tamanho da pose, voo **linear**. Carga aumenta velocidade e dano. Flechas ilimitadas neste protótipo.
+- **Arco**: segure `Q` para sacar. O **mouse** aponta a mira (cruzeta e linha de tiro). Clique esquerdo puxa a corda; soltar dispara na direção do cursor. `J` também dispara. Carga aumenta velocidade e dano. Flechas ilimitadas neste protótipo.
 - **Garra Espiritual** (golpe pesado): mais alcance e dano; só depois da terceira onça.
 - **Defesa**: reduz o dano a 22% e ganha uma recuperação curta (não é invencível; ainda passa chip).
 - **I-frames** após hit sem bloqueio. Vida não desce abaixo de zero; HP 0 vai para a derrota, inclusive se o golpe for só a hitbox da onça (sem encostar o corpo).
@@ -92,8 +92,8 @@ Três **ervas sagradas** estão no chão. Andar perto (ou `E` junto delas) **col
 | Pular | `W`, `↑` ou `Espaço` |
 | Agachar | `S` ou `↓` |
 | Ataque com lança | `J` ou clique esquerdo (sem o arco sacado) |
-| Arco / mira | Segurar `Q` |
-| Disparo do arco | `J` ou clique esquerdo com `Q` preso; soltar dispara |
+| Arco / mira | Segurar `Q`; o mouse aponta |
+| Disparo do arco | Clique esquerdo com `Q` preso (soltar dispara). `J` também vale |
 | Garra espiritual | Clique direito (após a 3ª onça) |
 | Defesa ancestral | `K` ou `Ctrl` |
 | Ervas sagradas | `E` usa uma erva do bolso (+25 HP). Andar perto colhe. |
