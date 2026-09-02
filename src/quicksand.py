@@ -70,7 +70,7 @@ def after_physics(player, dt: float) -> None:
         return
     pool = feet_in_quicksand(player.rect)
     sinking = getattr(player, "sand_sink", 0.0) > 0
-    if pool is None and not sinking:
+    if pool is None:
         reset(player)
         return
     if not player.on_ground and not sinking:

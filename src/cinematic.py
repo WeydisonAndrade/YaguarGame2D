@@ -12,6 +12,11 @@ from src.config import (
     BOSS_CINEMATIC_FOLDER,
     BOSS_CINEMATIC_KICKER,
     BOSS_CINEMATIC_PANS,
+    SAND_CINEMATIC_CAPTIONS,
+    SAND_CINEMATIC_FILES,
+    SAND_CINEMATIC_FOLDER,
+    SAND_CINEMATIC_KICKER,
+    SAND_CINEMATIC_PANS,
     CINEMATIC_CAPTIONS,
     CINEMATIC_FADE_FRAMES,
     CINEMATIC_FILES,
@@ -119,6 +124,16 @@ class CinematicSequence:
             captions=BOSS_CINEMATIC_CAPTIONS,
             pans=BOSS_CINEMATIC_PANS,
             kicker=BOSS_CINEMATIC_KICKER,
+        )
+
+    @classmethod
+    def sand(cls) -> "CinematicSequence":
+        return cls(
+            folder=SAND_CINEMATIC_FOLDER,
+            files=SAND_CINEMATIC_FILES,
+            captions=SAND_CINEMATIC_CAPTIONS,
+            pans=SAND_CINEMATIC_PANS,
+            kicker=SAND_CINEMATIC_KICKER,
         )
 
     @property

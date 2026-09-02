@@ -5,9 +5,9 @@ from __future__ import annotations
 import pygame
 
 from src.cinematic import CinematicSequence
-from src.config import CINEMATIC_FADE_FRAMES, CINEMATIC_HOLD_FRAMES
+from src.config import CINEMATIC_FADE_FRAMES, CINEMATIC_HOLD_FRAMES, GROUND_Y
 from src.game import Game
-from src.game_states import CinematicIntroState, PlayingState
+from src.game_states import CinematicIntroState, PlayingState, SandCinematicState, BossCinematicState
 
 
 def _click(pos=(512, 300)) -> pygame.event.Event:
@@ -87,3 +87,35 @@ def test_cinematica_do_mapinguari_carrega_sete_quadros():
     assert seq.shot_count == 7
     assert seq.done is False
     assert "MAPINGUARI" in seq.kicker
+
+
+def test_cinematica_da_areia_carrega_seis_quadros():
+    seq = CinematicSequence.sand()
+    assert seq.shot_count == 6
+    assert seq.done is False
+    assert "AREIA" in seq.kicker
+
+
+def test_cinematica_da_areia_dispara_antes_das_pocas():
+    from src.config import SAND_CINEMATIC_GATE_X
+
+    game = Game()
+    game.change_state(PlayingState())
+    game.begin_forest_crossing()
+    game.player.rect.midbottom = (SAND_CINEMATIC_GATE_X, GROUND_Y)
+    game.player.on_ground = True
+    game.state.update(game)
+    assert isinstance(game.state, SandCinematicState)
+
+
+def test_cinematica_da_areia_nao_repete():
+    from src.config import SAND_CINEMATIC_GATE_X
+
+    game = Game()
+    game.change_state(PlayingState())
+    game.begin_forest_crossing()
+    game.sand_cinematic_done = True
+    game.player.rect.midbottom = (SAND_CINEMATIC_GATE_X, GROUND_Y)
+    game.player.on_ground = True
+    game.state.update(game)
+    assert isinstance(game.state, PlayingState)

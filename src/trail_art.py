@@ -45,8 +45,8 @@ FENDAS_FAR = PARALLAX_DIR / "forest_fendas_far.png"
 TRAIL_SRC_GROUND_Y = 500
 # No forest1 1024×682, o lábio da laje de pedra.
 FOREST_SRC_GROUND_Y = 544
-# Arena do Mapinguari 1024×600: topo do chão pintado.
-BOSS_SRC_GROUND_Y = 511
+# Arena do Mapinguari 1024×600: topo do chão de pedra (lábio da laje).
+BOSS_SRC_GROUND_Y = 486
 
 
 def _first_file(candidates: tuple[Path, ...]) -> Path | None:

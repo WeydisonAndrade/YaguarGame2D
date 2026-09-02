@@ -290,3 +290,34 @@ BOSS_CINEMATIC_PANS = (
     (0.00, -0.30),
 )
 BOSS_CINEMATIC_KICKER = "FASE I  ·  O MAPINGUARI"
+
+# ---------------------------------------------------------------------------
+# Cinemática da areia movediça (antes das poças, na travessia)
+# ---------------------------------------------------------------------------
+SAND_CINEMATIC_GATE_X = CONTINUE_DRAW_X
+SAND_CINEMATIC_FOLDER = "cinematic_sand"
+SAND_CINEMATIC_FILES = (
+    "img01.png",
+    "img02.png",
+    "img03.png",
+    "img04.png",
+    "img05.png",
+    "img06.png",
+)
+SAND_CINEMATIC_CAPTIONS = (
+    "Yáguar chega à clareira. O chão dourado esconde a morte.",
+    "Areia movediça. Não há passagem segura.",
+    "Uma pantera negra bloqueia o caminho.",
+    "A fera ataca. Yáguar recua.",
+    "A areia prende as patas. A caçadora é a presa.",
+    "A floresta engole a pantera. Yáguar observa, assustado.",
+)
+SAND_CINEMATIC_PANS = (
+    (0.35, -0.20),
+    (-0.25, 0.15),
+    (0.30, 0.10),
+    (0.00, -0.25),
+    (-0.15, 0.20),
+    (0.00, -0.30),
+)
+SAND_CINEMATIC_KICKER = "FASE I  ·  A AREIA MOVEDIÇA"

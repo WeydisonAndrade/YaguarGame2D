@@ -71,6 +71,7 @@ def test_terceira_onca_abre_a_clareira_e_depois_o_mapinguari(game, monkeypatch):
 
     game.player.rect.midbottom = (MAPINGUARI_GATE_X, TRAIL_GROUND_Y)
     game.player.on_ground = True
+    game.sand_cinematic_done = True
     game.state.update(game)
     assert isinstance(game.state, BossCinematicState)
 
@@ -324,6 +325,7 @@ def test_pisar_na_areia_movedica_engole_e_devolve_ao_checkpoint(game, monkeypatc
     start = game.player.health
     ck = 400
     game.player.checkpoint = (ck, TRAIL_GROUND_Y)
+    game.sand_cinematic_done = True
     left, width = CONTINUE_SAND_POOLS[0]
     game.player.rect.midbottom = (left + width // 2, TRAIL_GROUND_Y)
     game.player.on_ground = True

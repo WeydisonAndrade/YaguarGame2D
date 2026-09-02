@@ -9,6 +9,7 @@ import random
 
 import pygame
 from src import audio
+from src import quicksand
 from src.config import (
     SCREEN_WIDTH,
     SCREEN_HEIGHT,
@@ -59,6 +60,7 @@ class Game:
         """Recria jogador, onça inicial e ervas — usado na intro e ao recomeçar."""
         set_physics_world(PLATFORMS, SCREEN_WIDTH, allow_pits=False)
         self.zone_stage = 0
+        self.sand_cinematic_done = False
         self.camera_x = 0
         self.herbs_collected = 0
         self.herbs_held = 0
@@ -111,6 +113,7 @@ class Game:
         self.player.vel_y = 0
         self.player.on_ground = True
         self.player.air_state = "grounded"
+        quicksand.reset(self.player)
         self.parallax.use_boss_arena()
         boss = MapinguariBoss(SCREEN_WIDTH - 220, GROUND_Y)
         self.enemies.add(boss)

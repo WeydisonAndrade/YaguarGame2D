@@ -13,7 +13,7 @@ from src.config import (SCREEN_WIDTH, SCREEN_HEIGHT, COLOR_TEXT, COLOR_GOLD,
                         ONCA_WAVE_TOTAL, ONCA_WAVE_KINDS, MAPINGUARI_GATE_X, TRAIL_FALL_DAMAGE,
                         TRAIL_FALL_Y, FOREST_CROSSING_PLATFORMS, FOREST_WORLD_WIDTH,
                         TRAIL_ORIGIN_X, SAND_ORIGIN_X, CONTINUE_ORIGIN_X,
-                        TRAIL_DRAW_X, SAND_DRAW_X, CONTINUE_DRAW_X,
+                        TRAIL_DRAW_X, SAND_DRAW_X, CONTINUE_DRAW_X, SAND_CINEMATIC_GATE_X,
                         CAMERA_ANCHOR_FWD, CAMERA_ANCHOR_BACK,
                         CAMERA_DEADZONE, CAMERA_LERP,
                         KEY_ATTACK, KEY_COLOR_COMPARE, MOUSE_ATTACK, MOUSE_HEAVY,
@@ -357,6 +357,38 @@ class CinematicIntroState(GameState):
         self.cine.draw(screen)
 
 
+class SandCinematicState(GameState):
+    """Pinturas da areia movediça; ao terminar, a travessia continua."""
+
+    def __init__(self, playing: PlayingState):
+        self.playing = playing
+        audio.play_cinematic()
+        self.cine = CinematicSequence.sand()
+
+    def _resume_crossing(self, game) -> None:
+        game.sand_cinematic_done = True
+        audio.play_fight()
+        self.playing.current_zone = _crossing_zone_label(game.player)
+        game.change_state(self.playing)
+
+    def handle_events(self, game, event):
+        if event.type == pygame.KEYDOWN and event.key in (pygame.K_SPACE, pygame.K_ESCAPE):
+            self._resume_crossing(game)
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.cine.done or self.cine.index >= max(0, self.cine.shot_count - 1):
+                self._resume_crossing(game)
+            else:
+                self.cine.advance()
+
+    def update(self, game):
+        self.cine.update()
+        if self.cine.done:
+            self._resume_crossing(game)
+
+    def draw(self, game, screen):
+        self.cine.draw(screen)
+
+
 class BossCinematicState(GameState):
     """Pinturas da arena do Mapinguari; ao terminar, o chefe entra na partida."""
 
@@ -573,6 +605,12 @@ class PlayingState(GameState):
                 _respawn_from_fall(game)
                 if _defeat_player(game):
                     return
+            if (
+                not getattr(game, "sand_cinematic_done", False)
+                and game.player.rect.centerx >= SAND_CINEMATIC_GATE_X
+            ):
+                game.change_state(SandCinematicState(self))
+                return
             if game.player.rect.centerx >= MAPINGUARI_GATE_X:
                 game.zone_stage = 2
                 self.current_zone = "Caminho da Montanha Sagrada"
