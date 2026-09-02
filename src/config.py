@@ -173,14 +173,14 @@ SAND_WORLD_WIDTH = SAND_DRAW_X + SCREEN_WIDTH
 
 # ---------------------------------------------------------------------------
 # Floresta após a areia — chão contínuo, poças pintadas no caminho.
-# Fonte 1536×1024: lábio da trilha ~680. Sem fendas: uma laje só.
+# Fonte 1536×1024: superfície das poças ~706, para os pés caírem na areia.
 # A pintura começa na última árvore da clareira: sobrepõe 320 px para o
 # tronco não aparecer duas vezes na costura.
 # ---------------------------------------------------------------------------
 CONTINUE_SEAM_OVERLAP = 320
 CONTINUE_ORIGIN_X = SAND_WORLD_WIDTH
 CONTINUE_DRAW_X = CONTINUE_ORIGIN_X - CONTINUE_SEAM_OVERLAP
-CONTINUE_SRC_GROUND_Y = 680
+CONTINUE_SRC_GROUND_Y = 706
 CONTINUE_A_X = CONTINUE_ORIGIN_X + 0
 CONTINUE_WORLD_WIDTH = CONTINUE_DRAW_X + SCREEN_WIDTH
 CONTINUE_PLATFORM_WIDTH = CONTINUE_WORLD_WIDTH - CONTINUE_ORIGIN_X
