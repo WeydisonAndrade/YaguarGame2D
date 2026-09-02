@@ -1,22 +1,25 @@
-"""Pintura das fendas e o mundo contínuo: floresta → clareira → areia."""
+"""Pintura das fendas e o mundo contínuo: floresta → clareira → areia.
+
+O erro de 'duas imagens unidas' vinha de colar a clareira deslocada (céu no meio
+da tela), tapar o topo com um vale de outra pintura e empilhar fades. Aqui cada
+clareira é a própria arte, reenquadrada no chão jogável, e a junta é só um
+crossfade curto entre dois quadros completos.
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from PIL import Image, ImageChops, ImageEnhance, ImageFilter, ImageStat
+from PIL import Image, ImageEnhance, ImageFilter, ImageStat
 
 from src.config import (
-    CROSSING_BLEND_PX,
-    CROSSING_OVERHANG_PX,
     FOREST_WORLD_WIDTH,
+    GROUND_Y,
     SAND_ART_GROUND_Y,
     SAND_ORIGIN_X,
     SAND_PLATFORMS,
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
-    TRAIL_ART_GROUND_Y,
-    TRAIL_DRAW_Y,
     TRAIL_ORIGIN_X,
     TRAIL_PLATFORMS,
 )
@@ -33,15 +36,19 @@ PLAY_SOURCES = (
     PARALLAX_DIR / "forest_fendas.png",
 )
 FOREST_NEAR = PARALLAX_DIR / "forest1.png"
-FOREST_FAR = PARALLAX_DIR / "forest_far.png"
 FENDAS_FAR = PARALLAX_DIR / "forest_fendas_far.png"
+
+# No PNG 1536×1024 da clareira, o lábio da grama (medida na arte).
+TRAIL_SRC_GROUND_Y = 457
 
 
 def _first_file(candidates: tuple[Path, ...]) -> Path | None:
+    """Devolve o primeiro caminho da lista que existe em disco."""
     return next((p for p in candidates if p.is_file()), None)
 
 
 def _cover_crop(src: Image.Image, tw: int, th: int) -> Image.Image:
+    """Escala a pintura no modo cover e recorta o centro no tamanho alvo."""
     sw, sh = src.size
     scale = max(tw / sw, th / sh)
     size = (max(tw, int(round(sw * scale))), max(th, int(round(sh * scale))))
@@ -62,84 +69,8 @@ def _hide_baked_ui(img: Image.Image) -> Image.Image:
     return out
 
 
-def _gradient_mask(width: int, height: int, fade: int, top_fade: int) -> Image.Image:
-    """Alpha: entra pela esquerda e pelo topo, para a pintura não cortar em linha."""
-    fade = max(1, min(width, fade))
-    top_fade = max(1, min(height, top_fade))
-    hx = Image.new("L", (width, 1))
-    hx.putdata([
-        int(255 * (t * t * (3 - 2 * t))) if x < fade else 255
-        for x in range(width)
-        for t in (min(1.0, x / fade),)
-    ])
-    vx = Image.new("L", (1, height))
-    vx.putdata([
-        int(255 * (t * t * (3 - 2 * t))) if y < top_fade else 255
-        for y in range(height)
-        for t in (min(1.0, y / top_fade),)
-    ])
-    return ImageChops.multiply(
-        hx.resize((width, height), Image.Resampling.BILINEAR),
-        vx.resize((width, height), Image.Resampling.BILINEAR),
-    )
-
-
-def _overhang_mask(width: int, height: int, hold: int) -> Image.Image:
-    """Opaco no começo (ainda o bioma anterior) e some para a direita."""
-    hold = max(0, min(width - 1, hold))
-    fade = max(1, width - hold)
-    row = []
-    for x in range(width):
-        if x <= hold:
-            row.append(255)
-        else:
-            t = (x - hold) / fade
-            s = t * t * (3 - 2 * t)
-            row.append(int(255 * (1.0 - s)))
-    img = Image.new("L", (width, 1))
-    img.putdata(row)
-    return img.resize((width, height), Image.Resampling.BILINEAR)
-
-
-def _harmonize_trail(trail: Image.Image, forest: Image.Image) -> Image.Image:
-    """Aproxima temperatura e exposição da clareira à floresta, sem copiar estrutura."""
-    sample = forest.resize((64, 64), Image.Resampling.BOX)
-    mean = ImageStat.Stat(sample).mean
-    veil = Image.new("RGB", trail.size, tuple(int(c) for c in mean[:3]))
-    cooled = ImageEnhance.Color(trail).enhance(0.86)
-    cooled = ImageEnhance.Contrast(cooled).enhance(0.92)
-    cooled = ImageEnhance.Brightness(cooled).enhance(1.05)
-    return Image.blend(cooled, veil, 0.16)
-
-
-def _harmonize_sand(sand: Image.Image, trail: Image.Image) -> Image.Image:
-    """A areia esquenta o chão, mas o dossel não troca de quadro."""
-    sample = trail.resize((64, 64), Image.Resampling.BOX)
-    mean = ImageStat.Stat(sample).mean
-    veil = Image.new("RGB", sand.size, tuple(int(c) for c in mean[:3]))
-    graded = ImageEnhance.Color(sand).enhance(0.9)
-    graded = ImageEnhance.Contrast(graded).enhance(0.96)
-    return Image.blend(graded, veil, 0.12)
-
-
-def _feather(im: Image.Image, pad: int = 16) -> Image.Image:
-    """Suaviza as bordas de um recorte para colar como prop, sem corte quadrado."""
-    im = im.convert("RGBA")
-    w, h = im.size
-    pad = max(1, min(pad, w // 2, h // 2))
-    mask = Image.new("L", (w, h), 255)
-    px = mask.load()
-    for y in range(h):
-        for x in range(w):
-            d = min(x, y, w - 1 - x, h - 1 - y)
-            if d < pad:
-                px[x, y] = int(255 * (d / pad))
-    alpha = im.split()[-1]
-    im.putalpha(ImageChops.multiply(alpha, mask))
-    return im
-
-
 def _hfade(width: int, height: int, fade: int, reverse: bool = False) -> Image.Image:
+    """Máscara horizontal suave (ease in-out): entra pela esquerda, ou pela direita se reverse."""
     fade = max(1, min(width, fade))
     row = []
     for x in range(width):
@@ -154,185 +85,135 @@ def _hfade(width: int, height: int, fade: int, reverse: bool = False) -> Image.I
     return img.resize((width, height), Image.Resampling.BILINEAR)
 
 
-def _shift_to_ground(src: Image.Image, art_ground_y: int) -> Image.Image:
-    """Desce a pintura até o chão jogável, sem esticar árvore nem preencher com cor chapada."""
+def _frame_to_ground(src: Image.Image, src_ground_y: int) -> Image.Image:
+    """Uma pintura só: céu no topo da tela, chão na linha jogável, largura da colisão.
+
+    Estica só na vertical o bastante para o lábio da grama cair em GROUND_Y.
+    Não cola segundo quadro, não deixa faixa preta, não desloca o céu para o meio.
+    """
     src = src.convert("RGB")
-    if src.size != (SCREEN_WIDTH, SCREEN_HEIGHT):
-        src = _cover_crop(src, SCREEN_WIDTH, SCREEN_HEIGHT)
-    dy = TRAIL_ART_GROUND_Y - art_ground_y
-    if dy == 0:
-        return src
-    canvas = src.copy()
-    if dy > 0:
-        sky = src.crop((0, 0, src.width, min(24, src.height)))
-        sky = sky.resize((src.width, dy), Image.Resampling.BILINEAR)
-        canvas = Image.new("RGB", src.size)
-        canvas.paste(sky, (0, 0))
-        canvas.paste(src, (0, dy))
-    return canvas
+    scale_x = SCREEN_WIDTH / src.width
+    nh = max(1, int(round(src.height * scale_x)))
+    scaled = src.resize((SCREEN_WIDTH, nh), Image.Resampling.LANCZOS)
+    gy = max(1, int(round(src_ground_y * scale_x)))
+    scale_y = GROUND_Y / gy
+    fitted = scaled.resize(
+        (SCREEN_WIDTH, max(SCREEN_HEIGHT, int(round(scaled.height * scale_y)))),
+        Image.Resampling.LANCZOS,
+    )
+    return fitted.crop((0, 0, SCREEN_WIDTH, SCREEN_HEIGHT))
 
 
-def _blur_horizontal_band(world: Image.Image, y: int, x0: int, x1: int, radius: float = 4.5) -> None:
-    """Esconde o lábio horizontal da pintura deslocada — blur curto, sem smear."""
-    band = 28
-    y0 = max(0, y - band)
-    y1 = min(world.height, y + band)
-    if x1 - x0 < 8 or y1 - y0 < 8:
-        return
-    strip = world.crop((x0, y0, x1, y1))
-    blur = strip.filter(ImageFilter.GaussianBlur(radius))
-    h = strip.height
-    cy = y - y0
-    col = Image.new("L", (1, h))
-    col.putdata([
-        int(170 * max(0.0, 1.0 - abs(i - cy) / max(1.0, band)))
-        for i in range(h)
+def _match_edge(art: Image.Image, neighbor: Image.Image) -> Image.Image:
+    """Ajuste leve de exposição na junta, sem véu cinza em cima da clareira inteira."""
+    if neighbor.width < 8 or neighbor.height < 8:
+        return art
+    sample_n = neighbor.resize((32, 32), Image.Resampling.BOX)
+    sample_a = art.crop((0, 0, min(80, art.width), art.height)).resize((32, 32), Image.Resampling.BOX)
+    mn = ImageStat.Stat(sample_n).mean
+    ma = ImageStat.Stat(sample_a).mean
+    veil = Image.new("RGB", art.size, tuple(int(c) for c in mn[:3]))
+    strength = min(0.22, sum(abs(a - b) for a, b in zip(mn[:3], ma[:3])) / 700.0)
+    graded = Image.blend(art, veil, strength)
+    mask = _hfade(art.width, art.height, min(160, art.width // 3), reverse=True)
+    return Image.composite(graded, art, mask)
+
+
+def _crossfade(world: Image.Image, art: Image.Image, dest_x: int, fade: int) -> None:
+    """Cola o quadro completo e mistura só a costura, com pixels reais dos dois lados."""
+    fade = max(24, min(fade, dest_x, art.width, world.width - dest_x))
+    prev = world.crop((dest_x - fade, 0, dest_x, SCREEN_HEIGHT))
+    sample = art.crop((0, 0, min(70, art.width), art.height)).resize((32, 32), Image.Resampling.BOX)
+    mean = ImageStat.Stat(sample).mean
+    veil = Image.new("RGB", prev.size, tuple(int(c) for c in mean[:3]))
+    outgoing = Image.blend(prev, veil, 0.34)
+    outgoing = ImageEnhance.Color(outgoing).enhance(0.86)
+    outgoing = ImageEnhance.Brightness(outgoing).enhance(0.90)
+    out_mask = _hfade(prev.width, prev.height, prev.width)
+    world.paste(Image.composite(outgoing, prev, out_mask), (dest_x - fade, 0))
+
+    prev = world.crop((dest_x - fade, 0, dest_x, SCREEN_HEIGHT))
+    art = _match_edge(art.convert("RGB"), prev)
+    world.paste(art, (dest_x, 0))
+
+    mix = min(20, fade)
+    left = world.crop((dest_x - mix, 0, dest_x, SCREEN_HEIGHT))
+    right = world.crop((dest_x, 0, dest_x + mix, SCREEN_HEIGHT))
+    world.paste(Image.blend(left, right, 0.42), (dest_x - mix, 0))
+    world.paste(Image.blend(right, left, 0.42), (dest_x, 0))
+
+    x0 = dest_x - fade
+    x1 = dest_x + fade
+    strip = world.crop((x0, 0, x1, SCREEN_HEIGHT))
+    blur = strip.filter(ImageFilter.GaussianBlur(3.6))
+    w, h = strip.size
+    cx = dest_x - x0
+    hx = Image.new("L", (w, 1))
+    hx.putdata([
+        int(210 * max(0.0, 1.0 - abs(i - cx) / max(1.0, fade)))
+        for i in range(w)
     ])
-    mask = col.resize(strip.size, Image.Resampling.BILINEAR)
-    world.paste(Image.composite(blur, strip, mask), (x0, y0))
-
-
-def _hang_previous(world: Image.Image, dest_x: int, hang_w: int, hang_hold: int) -> None:
-    """A copa do trecho anterior atravessa a junta — um galho, não um espelho."""
-    hang_w = min(hang_w, dest_x)
-    if hang_w < 8:
-        return
-    hanging = world.crop((dest_x - hang_w, 0, dest_x, SCREEN_HEIGHT)).convert("RGBA")
-    hanging.putalpha(_overhang_mask(hanging.width, hanging.height, hang_hold))
-    world.paste(hanging, (dest_x - hang_hold, 0), hanging)
+    mask = hx.resize((w, h), Image.Resampling.BILINEAR)
+    world.paste(Image.composite(blur, strip, mask), (x0, 0))
 
 
 def _load_valley() -> Image.Image | None:
-    src = FENDAS_FAR if FENDAS_FAR.is_file() else None
-    if src is None:
+    """Carrega o vale distante usado só no fundo das fendas, não como céu da clareira."""
+    if not FENDAS_FAR.is_file():
         return None
-    valley = _cover_crop(Image.open(src).convert("RGB"), SCREEN_WIDTH, SCREEN_HEIGHT)
+    valley = _cover_crop(Image.open(FENDAS_FAR).convert("RGB"), SCREEN_WIDTH, SCREEN_HEIGHT)
     valley = ImageEnhance.Contrast(valley).enhance(0.78)
     valley = ImageEnhance.Color(valley).enhance(0.9)
     valley = ImageEnhance.Brightness(valley).enhance(1.06)
     return valley
 
 
-def _dress_approach(world: Image.Image, forest: Image.Image) -> None:
-    """Pedras extras e névoa crescente: floresta → terreno irregular → borda."""
-    start = 700
-    span = TRAIL_ORIGIN_X - start
-    if span <= 0:
-        return
-    forest_part = world.crop((start, 0, TRAIL_ORIGIN_X, SCREEN_HEIGHT))
-    mist = ImageEnhance.Color(forest_part).enhance(0.88)
-    mist = ImageEnhance.Brightness(mist).enhance(1.07)
-    mask = _hfade(span, SCREEN_HEIGHT, span)
-    dressed = Image.composite(mist, forest_part, mask)
-    world.paste(dressed, (start, 0))
-
-    props = (
-        ((410, 400, 560, 508), 680, 398, 0.94),
-        ((668, 388, 830, 508), 798, 392, 1.08),
-        ((250, 428, 340, 518), 910, 418, 0.82),
-        ((740, 430, 860, 520), 860, 428, 0.9),
-    )
-    for box, dx, dy, scale in props:
-        x0, y0, x1, y1 = box
-        if x1 > forest.width or y1 > forest.height:
-            continue
-        chip = forest.crop((x0, y0, x1, y1))
-        if scale != 1.0:
-            nw = max(8, int(chip.width * scale))
-            nh = max(8, int(chip.height * scale))
-            chip = chip.resize((nw, nh), Image.Resampling.LANCZOS)
-        chip = _feather(chip, pad=max(10, min(chip.width, chip.height) // 6))
-        world.paste(chip, (dx, dy), chip)
-
-
-def _open_to_valley(world: Image.Image, valley: Image.Image) -> None:
-    """O vale começa a aparecer entre as árvores, antes da primeira fenda."""
-    start = 760
-    span = TRAIL_ORIGIN_X - start
-    if span <= 0:
-        return
-    forest_part = world.crop((start, 0, TRAIL_ORIGIN_X, SCREEN_HEIGHT))
-    valley_part = valley.crop((0, 0, span, SCREEN_HEIGHT))
-    mask = _hfade(span, SCREEN_HEIGHT, span)
-    mask = mask.point(lambda a: int(a * 0.42))
-    blended = Image.composite(valley_part, forest_part, mask)
-    world.paste(blended, (start, 0))
-
-
-def _accent_ledges(world: Image.Image, platforms=TRAIL_PLATFORMS) -> None:
-    """Clareia a grama e escurece o lábio — silhueta jogável, sem contorno de HUD."""
-    for x, y, w, _h in platforms:
-        top = max(0, y - 10)
-        lip = min(SCREEN_HEIGHT, y + 8)
-        if w < 8 or lip <= top:
-            continue
-        grass = world.crop((x, top, x + w, lip))
-        grass = ImageEnhance.Brightness(grass).enhance(1.16)
-        grass = ImageEnhance.Color(grass).enhance(1.08)
-        world.paste(grass, (x, top))
-        shade_top = min(SCREEN_HEIGHT, y + 6)
-        shade_bot = min(SCREEN_HEIGHT, y + 26)
-        if shade_bot > shade_top:
-            shade = world.crop((x, shade_top, x + w, shade_bot))
-            shade = ImageEnhance.Brightness(shade).enhance(0.78)
-            world.paste(shade, (x, shade_top))
-
-
-def _haze_gaps(world: Image.Image, valley: Image.Image | None) -> None:
-    """Névoa nos vãos: quanto mais fundo o vale, menor o contraste."""
-    plats = list(TRAIL_PLATFORMS)
+def _haze_gaps(world: Image.Image, valley: Image.Image | None, platforms=TRAIL_PLATFORMS) -> None:
+    """Névoa nos vãos da clareira e da areia; o vale se repete se o mundo for mais largo."""
+    plats = list(platforms)
     for prev, nxt in zip(plats, plats[1:]):
         gx0 = prev[0] + prev[2]
         gx1 = nxt[0]
         if gx1 - gx0 < 12:
             continue
         gap = world.crop((gx0, 0, gx1, SCREEN_HEIGHT))
-        if valley is not None:
-            vx = min(valley.width, max(0, gx0 - TRAIL_ORIGIN_X))
-            vw = min(valley.width - vx, gx1 - gx0)
-            if vw > 0:
+        if valley is not None and valley.width > 0:
+            remaining = gx1 - gx0
+            ox = 0
+            while remaining > 0:
+                vx = (gx0 + ox) % valley.width
+                vw = min(valley.width - vx, remaining)
                 far = valley.crop((vx, 0, vx + vw, SCREEN_HEIGHT))
                 far = ImageEnhance.Contrast(far).enhance(0.7)
-                gap = Image.blend(gap, far, 0.28)
-        gap = ImageEnhance.Contrast(gap).enhance(0.86)
-        gap = ImageEnhance.Brightness(gap).enhance(1.05)
+                piece = gap.crop((ox, 0, ox + vw, SCREEN_HEIGHT))
+                gap.paste(Image.blend(piece, far, 0.18), (ox, 0))
+                ox += vw
+                remaining -= vw
+        gap = ImageEnhance.Contrast(gap).enhance(0.92)
         world.paste(gap, (gx0, 0))
 
 
-def _paste_play_art(
-    world: Image.Image,
-    art: Image.Image,
-    dest_x: int,
-    *,
-    hang_w: int,
-    hang_hold: int,
-    fade: int,
-    top_fade: int,
-) -> None:
-    """Cola a pintura na proporção original, com fade e copa do vizinho por cima."""
-    _hang_previous(world, dest_x, hang_w, hang_hold)
-    overlay = art.convert("RGBA")
-    overlay.putalpha(_gradient_mask(overlay.width, overlay.height, fade, top_fade))
-    world.paste(overlay, (dest_x, TRAIL_DRAW_Y), overlay)
-    _blur_horizontal_band(world, TRAIL_DRAW_Y, dest_x, dest_x + art.width)
-
-
 def build_trail_art() -> Path:
+    """Gera forest_trail.png: a clareira inteira, chão alinhado, céu da própria pintura."""
     play_src = _first_file(PLAY_SOURCES)
     if play_src is None:
         raise FileNotFoundError(
             "Este asset não existe atualmente no projeto: parallax/forest_fendas.jpg"
         )
-    raw_play = Image.open(play_src).convert("RGB")
-    play = _cover_crop(raw_play, SCREEN_WIDTH, SCREEN_HEIGHT)
-    if play_src.name != "forest_fendas_clean.png":
+    raw = Image.open(play_src).convert("RGB")
+    if play_src.name == "forest_fendas_clean.png":
+        play = _frame_to_ground(raw, TRAIL_SRC_GROUND_Y)
+    else:
+        play = _cover_crop(raw, SCREEN_WIDTH, SCREEN_HEIGHT)
         play = _hide_baked_ui(play)
+        play = _frame_to_ground(play, int(SCREEN_HEIGHT * 0.44))
     PARALLAX_DIR.mkdir(parents=True, exist_ok=True)
     play.save(TRAIL_PATH, "PNG")
     return TRAIL_PATH
 
 
 def ensure_trail_art(force: bool = False) -> Path:
+    """Reconstrói a pintura da clareira só se o arquivo estiver ausente ou desatualizado."""
     play_src = _first_file(PLAY_SOURCES)
     if play_src is None:
         raise FileNotFoundError(
@@ -346,64 +227,35 @@ def ensure_trail_art(force: bool = False) -> Path:
     return build_trail_art()
 
 
-def _append_sand(world: Image.Image, valley: Image.Image | None, trail_ref: Image.Image) -> None:
-    """Continua a clareira com a areia, sem esticar nem copiar copa."""
+def _append_sand(world: Image.Image) -> None:
+    """A areia é o quadro seguinte: mesma altura de chão, crossfade na junta."""
     if not SAND_PATH.is_file():
         raise FileNotFoundError(
             "Este asset não existe atualmente no projeto: parallax/forest_sand_fendas.png"
         )
-    if valley is not None:
-        world.paste(valley, (SAND_ORIGIN_X, 0))
-
-    sand = _cover_crop(Image.open(SAND_PATH).convert("RGB"), SCREEN_WIDTH, SCREEN_HEIGHT)
-    sand = _shift_to_ground(sand, SAND_ART_GROUND_Y)
-    sand = _harmonize_sand(sand, trail_ref)
-    _paste_play_art(
-        world,
-        sand,
-        SAND_ORIGIN_X,
-        hang_w=min(140, CROSSING_OVERHANG_PX),
-        hang_hold=48,
-        fade=min(CROSSING_BLEND_PX + 40, sand.width // 2),
-        top_fade=128,
-    )
+    sand = Image.open(SAND_PATH).convert("RGB")
+    if sand.size != (SCREEN_WIDTH, SCREEN_HEIGHT):
+        sand = _cover_crop(sand, SCREEN_WIDTH, SCREEN_HEIGHT)
+    sand = _frame_to_ground(sand, SAND_ART_GROUND_Y)
+    _crossfade(world, sand, SAND_ORIGIN_X, 88)
 
 
 def build_crossing_world() -> Path:
-    """Monta o strip contínuo: floresta + vale + clareira + areia, sem tiling."""
-    ensure_trail_art()
+    """Monta o strip: três telas completas, juntas em crossfade, sem carimbo de vale no céu."""
+    ensure_trail_art(force=True)
     if not FOREST_NEAR.is_file():
         raise FileNotFoundError("Este asset não existe atualmente no projeto: parallax/forest1.png")
 
-    near = Image.open(FOREST_NEAR).convert("RGB")
-    left = _cover_crop(near, SCREEN_WIDTH, SCREEN_HEIGHT)
+    left = _cover_crop(Image.open(FOREST_NEAR).convert("RGB"), SCREEN_WIDTH, SCREEN_HEIGHT)
     valley = _load_valley()
+    trail = Image.open(TRAIL_PATH).convert("RGB")
 
     world = Image.new("RGB", (FOREST_WORLD_WIDTH, SCREEN_HEIGHT), (22, 36, 28))
-    if valley is not None:
-        world.paste(valley, (TRAIL_ORIGIN_X, 0))
-        world.paste(valley, (SAND_ORIGIN_X, 0))
     world.paste(left, (0, 0))
-    _dress_approach(world, left)
-    if valley is not None:
-        _open_to_valley(world, valley)
-
-    trail = Image.open(TRAIL_PATH).convert("RGB")
-    trail = _harmonize_trail(trail, left)
-    _paste_play_art(
-        world,
-        trail,
-        TRAIL_ORIGIN_X,
-        hang_w=CROSSING_OVERHANG_PX,
-        hang_hold=80,
-        fade=CROSSING_BLEND_PX,
-        top_fade=max(88, TRAIL_DRAW_Y // 2),
-    )
-
-    _accent_ledges(world, TRAIL_PLATFORMS)
-    _haze_gaps(world, valley)
-    _append_sand(world, valley, trail)
-    _accent_ledges(world, SAND_PLATFORMS)
+    _crossfade(world, trail, TRAIL_ORIGIN_X, 110)
+    _haze_gaps(world, valley, TRAIL_PLATFORMS)
+    _append_sand(world)
+    _haze_gaps(world, valley, SAND_PLATFORMS)
 
     PARALLAX_DIR.mkdir(parents=True, exist_ok=True)
     world.save(CROSSING_PATH, "PNG")
@@ -411,14 +263,23 @@ def build_crossing_world() -> Path:
 
 
 def _crossing_sources() -> list[Path]:
+    """Arquivos cuja data manda reconstruir o strip da travessia."""
     play = _first_file(PLAY_SOURCES)
-    out = [FOREST_NEAR, FOREST_FAR, FENDAS_FAR, TRAIL_PATH, SAND_PATH, Path(__file__), Path(__file__).with_name("config.py")]
+    out = [
+        FOREST_NEAR,
+        FENDAS_FAR,
+        TRAIL_PATH,
+        SAND_PATH,
+        Path(__file__),
+        Path(__file__).with_name("config.py"),
+    ]
     if play is not None:
         out.append(play)
     return [p for p in out if p.is_file()]
 
 
 def ensure_crossing_world(force: bool = False) -> Path:
+    """Garante forest_crossing.png no tamanho do mundo; reconstrói se a arte ou o código mudou."""
     from src.layered_art import ensure_world_layers
 
     ensure_world_layers(force=force)

@@ -71,6 +71,7 @@ LAYER_OUTPUTS = (
 
 
 def _cover_crop(src: Image.Image, tw: int, th: int) -> Image.Image:
+    """Escala no modo cover e recorta o centro no tamanho alvo."""
     sw, sh = src.size
     scale = max(tw / sw, th / sh)
     size = (max(tw, int(round(sw * scale))), max(th, int(round(sh * scale))))
@@ -81,6 +82,7 @@ def _cover_crop(src: Image.Image, tw: int, th: int) -> Image.Image:
 
 
 def _save(path: Path, img: Image.Image) -> Path:
+    """Grava o PNG, criando a pasta de destino se ainda não existir."""
     path.parent.mkdir(parents=True, exist_ok=True)
     img.save(path, "PNG")
     return path
@@ -128,6 +130,7 @@ def chroma_key_black(im: Image.Image, luma_cut: float = 16.0) -> Image.Image:
 
 
 def _autocrop(im: Image.Image, pad: int = 2) -> Image.Image:
+    """Corta o retângulo opaco da imagem, com uma margem extra em pixels."""
     bbox = im.getbbox()
     if not bbox:
         return im
@@ -140,6 +143,7 @@ def _autocrop(im: Image.Image, pad: int = 2) -> Image.Image:
 
 
 def _fit_height(im: Image.Image, height: int, max_width: int | None = None) -> Image.Image:
+    """Redimensiona pela altura; se passar de max_width, limita pela largura."""
     if im.height == 0:
         return im
     scale = height / im.height
@@ -153,6 +157,7 @@ def _fit_height(im: Image.Image, height: int, max_width: int | None = None) -> I
 
 
 def _hfade(width: int, height: int, fade: int, reverse: bool = False) -> Image.Image:
+    """Máscara horizontal suave para costurar duas pinturas lado a lado."""
     fade = max(1, min(width, fade))
     row = []
     for x in range(width):
@@ -168,6 +173,7 @@ def _hfade(width: int, height: int, fade: int, reverse: bool = False) -> Image.I
 
 
 def _vfade(width: int, height: int, top: int, bottom: int) -> Image.Image:
+    """Máscara vertical: some no topo e/ou na base para colar recortes sem corte seco."""
     mask = Image.new("L", (width, height), 255)
     px = mask.load()
     top = max(1, min(height, top))
@@ -187,6 +193,7 @@ def _vfade(width: int, height: int, top: int, bottom: int) -> Image.Image:
 
 
 def _irregular_hmask(width: int, height: int, fade_lo: int, fade_hi: int) -> Image.Image:
+    """Fade horizontal com onda, para a junta não virar uma linha reta."""
     fade_lo = max(8, min(width, fade_lo))
     fade_hi = max(fade_lo, min(width, fade_hi))
     mask = Image.new("L", (width, height))
@@ -206,6 +213,7 @@ def _irregular_hmask(width: int, height: int, fade_lo: int, fade_hi: int) -> Ima
 
 
 def _find_gen(name: str) -> Path | None:
+    """Procura o recorte gerado no pacote do jogo ou na caixa de entrada do Cursor."""
     for root in (ASSETS_DIR, GEN_INBOX):
         path = root / name
         if path.is_file():
@@ -214,6 +222,7 @@ def _find_gen(name: str) -> Path | None:
 
 
 def _process_cutout(name: str, height: int, max_width: int | None = None) -> Image.Image | None:
+    """Remove o magenta, corta o vazio e encaixa o recorte na altura pedida."""
     src = _find_gen(name)
     if src is None:
         return None
@@ -225,6 +234,7 @@ def _process_cutout(name: str, height: int, max_width: int | None = None) -> Ima
 
 
 def _build_mountain_far() -> None:
+    """Gera o fundo distante da montanha a partir de forest_far/forest2."""
     src = PARALLAX_DIR / "forest_far.png"
     if not src.is_file():
         src = PARALLAX_DIR / "forest2.png"
@@ -245,6 +255,7 @@ def _build_mountain_far() -> None:
 
 
 def _build_mountain_mid() -> None:
+    """Gera o plano médio da montanha com chroma magenta e preto."""
     src = PARALLAX_DIR / "forest_mid.png"
     if not src.is_file():
         return
@@ -259,6 +270,7 @@ def _build_mountain_mid() -> None:
 
 
 def _build_cave_entrance() -> None:
+    """Gera o recorte da boca da caverna, se o PNG de chroma existir."""
     cut = _process_cutout("env_cave_entrance_01.png", SCREEN_HEIGHT, max_width=SCREEN_WIDTH + 80)
     if cut is None:
         return
@@ -266,6 +278,7 @@ def _build_cave_entrance() -> None:
 
 
 def _feather_top(im: Image.Image, fade: int) -> Image.Image:
+    """Suaviza o topo de uma faixa de chão para colar sobre o fundo."""
     im = im.convert("RGBA")
     mask = _vfade(im.width, im.height, fade, 0)
     alpha = im.split()[-1]
@@ -274,6 +287,7 @@ def _feather_top(im: Image.Image, fade: int) -> Image.Image:
 
 
 def _build_terrain() -> None:
+    """Recorta faixas de chão, borda e piso de caverna a partir do foreground."""
     wall_src = PARALLAX_DIR / "forest_fg.png"
     forest2 = PARALLAX_DIR / "forest2.png"
     if wall_src.is_file():
@@ -306,6 +320,7 @@ def _build_terrain() -> None:
 
 
 def _build_foreground() -> None:
+    """Gera folhas, cipó, raiz e névoa de primeiro plano."""
     fg_src = PARALLAX_DIR / "forest_fg.png"
     mid_src = PARALLAX_DIR / "forest_mid.png"
     if fg_src.is_file():
@@ -350,6 +365,7 @@ def _build_foreground() -> None:
 
 
 def _build_transition() -> None:
+    """Monta a faixa de passagem cipó → montanha, com junta irregular."""
     vines = PARALLAX_DIR / "forest_vines.jpg"
     mountain = PARALLAX_DIR / "forest2.png"
     if not vines.is_file() or not mountain.is_file():
@@ -368,6 +384,7 @@ def _build_transition() -> None:
 
 
 def _hide_climber(img: Image.Image) -> Image.Image:
+    """Tapa a silhueta de um personagem que veio baked na pintura das fendas."""
     w, h = img.size
     x0, y0, x1, y1 = 18, max(0, int(h * 0.22)), min(w, 175), min(h, int(h * 0.48))
     if x1 <= x0 + 8 or y1 <= y0 + 8:
@@ -384,6 +401,7 @@ def _hide_climber(img: Image.Image) -> Image.Image:
 
 
 def _build_midground() -> None:
+    """Dois painéis de vale+cipó (2048×600) para o plano médio das fendas."""
     fendas = PARALLAX_DIR / "forest_fendas_far.png"
     vines = PARALLAX_DIR / "forest_vines.jpg"
     if not fendas.is_file():
@@ -413,6 +431,7 @@ def _build_midground() -> None:
 
 
 def _process_vine_tile(name: str, target_w: int, tile_h: int) -> Image.Image | None:
+    """Recorta um segmento de cipó na largura do tile, com chroma magenta."""
     src = _find_gen(name)
     if src is None:
         return None
@@ -431,6 +450,7 @@ def _process_vine_tile(name: str, target_w: int, tile_h: int) -> Image.Image | N
 
 
 def _build_vine_cutouts() -> None:
+    """Gera segmentos, âncoras e tufo de musgo usados nas trepadeiras jogáveis."""
     segs = (
         ("vine_liana_01.png", VINE_SEG_01, 20, 96),
         ("vine_liana_02.png", VINE_SEG_02, 18, 96),
@@ -466,6 +486,7 @@ def _build_vine_cutouts() -> None:
 
 
 def _sources() -> list[Path]:
+    """Lista as pinturas de origem cuja data decide se as camadas precisam ser refeitas."""
     names = (
         "forest2.png",
         "forest_far.png",
@@ -497,6 +518,7 @@ def _sources() -> list[Path]:
 
 
 def build_world_layers() -> list[Path]:
+    """Reconstrói todas as camadas derivadas e devolve os caminhos que existem."""
     _build_mountain_far()
     _build_mountain_mid()
     _build_cave_entrance()
@@ -509,6 +531,7 @@ def build_world_layers() -> list[Path]:
 
 
 def ensure_world_layers(force: bool = False) -> list[Path]:
+    """Reconstrói as camadas só se alguma origem for mais nova que o PNG gerado."""
     sources = _sources()
     existing = [p for p in LAYER_OUTPUTS if p.is_file()]
     if not force and existing and sources:

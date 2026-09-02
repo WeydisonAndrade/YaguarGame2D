@@ -173,6 +173,7 @@ def _follow_camera(game) -> None:
 
 
 def _update_trail_checkpoint(player) -> None:
+    """Grava o último ponto seguro no miolo de uma laje, para o respawn da queda."""
     if not player.on_ground:
         return
     for x, y, w, _h in FOREST_CROSSING_PLATFORMS:
@@ -184,6 +185,7 @@ def _update_trail_checkpoint(player) -> None:
 
 
 def _crossing_zone_label(player) -> str:
+    """Nome da região no HUD conforme o X do Yáguar na travessia."""
     x = player.rect.centerx
     if x >= MAPINGUARI_GATE_X - 80:
         return "Caminho da Montanha Sagrada"

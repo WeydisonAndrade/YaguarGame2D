@@ -136,6 +136,23 @@ def test_mundo_da_travessia_termina_na_areia():
     assert delta < 110
 
 
+def test_nevoa_das_fendas_alcanca_a_areia():
+    """A névoa do vale precisa amostrar a areia por wrapping, não só a primeira clareira."""
+    from PIL import Image
+
+    from src.config import FOREST_WORLD_WIDTH, SAND_PLATFORMS
+    from src.trail_art import _haze_gaps
+
+    world = Image.new("RGB", (FOREST_WORLD_WIDTH, SCREEN_HEIGHT), (0, 0, 0))
+    valley = Image.new("RGB", (SCREEN_WIDTH, SCREEN_HEIGHT), (255, 255, 255))
+    _haze_gaps(world, valley, SAND_PLATFORMS)
+    gap_x = SAND_PLATFORMS[0][0] + SAND_PLATFORMS[0][2] + 8
+    r, g, b = world.getpixel((gap_x, 200))
+    assert r > 40
+    assert g > 40
+    assert b > 40
+
+
 def _opaque_paper_pixels(path: Path, luma_min: float = 220) -> int:
     from PIL import Image
 

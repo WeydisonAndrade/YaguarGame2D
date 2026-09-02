@@ -106,6 +106,52 @@ def test_queda_na_clareira_fere_e_devolve_ao_checkpoint(game, monkeypatch):
     assert game.player.on_ground is True
 
 
+def test_queda_na_areia_fere_e_devolve_ao_checkpoint(game, monkeypatch):
+    """Cair na segunda clareira usa o mesmo respawn da travessia."""
+    from src.config import SAND_A_X, SAND_GAP_1_WIDTH, SAND_PLATFORM_A_WIDTH
+
+    _idle_keys(monkeypatch)
+    game.begin_forest_crossing()
+    start = game.player.health
+    ck = SAND_A_X + 80
+    game.player.checkpoint = (ck, TRAIL_GROUND_Y)
+    gap_x = SAND_A_X + SAND_PLATFORM_A_WIDTH + SAND_GAP_1_WIDTH // 2
+    game.player.rect.midbottom = (gap_x, TRAIL_GROUND_Y + 40)
+    game.player.vel_y = 12
+    game.player.on_ground = False
+
+    for _ in range(90):
+        if not isinstance(game.state, PlayingState):
+            break
+        game.state.update(game)
+        if game.player.health < start:
+            break
+
+    assert isinstance(game.state, PlayingState)
+    assert game.player.health == start - TRAIL_FALL_DAMAGE
+    assert game.player.rect.centerx == ck
+    assert game.player.on_ground is True
+
+
+def test_camera_nao_ultrapassa_o_fim_do_mundo(game, monkeypatch):
+    """Na areia a câmera segue o Yáguar sem sair do strip de 3 telas."""
+    from src.config import FOREST_WORLD_WIDTH, SAND_ORIGIN_X
+
+    _idle_keys(monkeypatch)
+    game.begin_forest_crossing()
+    game.player.rect.midbottom = (SAND_ORIGIN_X + 100, GROUND_Y)
+    game.player.facing = 1
+    game.player.on_ground = True
+    game.player.vel_y = 0
+    game.camera_x = 0
+    max_cam = FOREST_WORLD_WIDTH - SCREEN_WIDTH
+    for _ in range(50):
+        game.state.update(game)
+    assert 0 <= game.camera_x <= max_cam
+    assert game.camera_x > SCREEN_WIDTH
+    assert game.zone_stage == 1
+
+
 def test_caminho_aberto_permite_voltar_a_arena(game, monkeypatch):
     """Com o caminho aberto, andar à esquerda devolve Yáguar à arena das onças."""
     _idle_keys(monkeypatch)

@@ -236,6 +236,7 @@ def test_fendas_da_areia_nao_tem_chao():
 
 
 def test_pulo_a_pe_cruza_as_fendas_da_areia():
+    """Os dois vãos da areia cabem no pulo a pé (~156 px), como na pintura."""
     from src.config import FOREST_WORLD_WIDTH, PLATFORMS, SAND_PLATFORMS, TRAIL_GROUND_Y
 
     set_physics_world(SAND_PLATFORMS, FOREST_WORLD_WIDTH, allow_pits=True)
@@ -253,5 +254,35 @@ def test_pulo_a_pe_cruza_as_fendas_da_areia():
                     landed = True
                     break
             assert landed, f"falhou {prev.right} → {nxt.left}"
+    finally:
+        set_physics_world(PLATFORMS, SCREEN_WIDTH, allow_pits=False)
+
+
+def test_fendas_da_areia_engolem_no_mundo_continuo():
+    """No strip arena+clareira+areia, nenhuma laje vizinha tapa o vão da areia."""
+    from src.config import (
+        FOREST_CROSSING_PLATFORMS,
+        FOREST_WORLD_WIDTH,
+        PLATFORMS,
+        SAND_GAP_1_WIDTH,
+        SAND_GAP_2_WIDTH,
+        SAND_PLATFORMS,
+        TRAIL_GROUND_Y,
+    )
+
+    walk_range = int(PLAYER_WALK_SPEED) * 39
+    assert SAND_GAP_1_WIDTH > 80
+    assert SAND_GAP_2_WIDTH > 80
+    assert SAND_GAP_1_WIDTH < walk_range
+    assert SAND_GAP_2_WIDTH < walk_range
+
+    set_physics_world(FOREST_CROSSING_PLATFORMS, FOREST_WORLD_WIDTH, allow_pits=True)
+    try:
+        plats = [pygame.Rect(*box) for box in SAND_PLATFORMS]
+        for prev, nxt in zip(plats, plats[1:]):
+            rect = pygame.Rect(0, 0, 92, 168)
+            rect.midbottom = ((prev.right + nxt.left) // 2, TRAIL_GROUND_Y)
+            _, _, grounded = apply_gravity_and_platforms(rect, 0.0, True)
+            assert grounded is False, f"andou sobre a fenda {prev.right}–{nxt.left}"
     finally:
         set_physics_world(PLATFORMS, SCREEN_WIDTH, allow_pits=False)

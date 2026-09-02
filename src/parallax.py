@@ -46,6 +46,7 @@ def _cover_scale(raw: pygame.Surface, tw: int, th: int) -> pygame.Surface:
 
 
 def _make_leaf(color: tuple[int, int, int], size: int) -> pygame.Surface:
+    """Carimbo de folha caindo: elipse + nervura, já com alpha."""
     surf = pygame.Surface((size * 2 + 4, size + 6), pygame.SRCALPHA)
     pygame.draw.ellipse(surf, (*color, 220), (2, 2, size * 2, size))
     dark = (max(0, color[0] - 30), max(0, color[1] - 30), max(0, color[2] - 24), 180)
@@ -54,6 +55,7 @@ def _make_leaf(color: tuple[int, int, int], size: int) -> pygame.Surface:
 
 
 def _make_mist(width: int, height: int, alpha: int) -> pygame.Surface:
+    """Faixa de névoa: várias elipses claras para deslizar em loop."""
     surf = pygame.Surface((width, height), pygame.SRCALPHA)
     for _ in range(18):
         rw = random.randint(int(width * 0.18), int(width * 0.42))
@@ -118,6 +120,7 @@ class ParallaxBackground:
         self.motes = [self._spawn_mote() for _ in range(28)]
 
     def _spawn_leaf(self, y: float | None = None) -> dict:
+        """Cria uma folha na chuva de partículas; y opcional para reciclar no topo."""
         return {
             "x": random.uniform(-20, SCREEN_WIDTH + 20),
             "y": random.uniform(-40, SCREEN_HEIGHT) if y is None else y,
@@ -130,6 +133,7 @@ class ParallaxBackground:
         }
 
     def _spawn_mote(self) -> dict:
+        """Cria um ponto de poeira/pólen que sobe e treme com o vento."""
         return {
             "x": random.uniform(0, SCREEN_WIDTH),
             "y": random.uniform(0, SCREEN_HEIGHT),
@@ -150,6 +154,7 @@ class ParallaxBackground:
         self.index = max(0, min(self.boss_index, len(self.scenes) - 1))
 
     def is_boss_arena(self) -> bool:
+        """True quando o fundo atual é a pintura da luta com o Mapinguari."""
         return self.mode == "scene" and self.index == self.boss_index
 
     def use_crossing(self) -> None:
@@ -243,6 +248,7 @@ class ParallaxBackground:
         self._draw_leaves(screen)
 
     def _draw_godrays(self, screen: pygame.Surface) -> None:
+        """Raios de sol diagonais, com balanço lento, sobre o fundo."""
         self._rays.fill((0, 0, 0, 0))
         t = self.time
         for i, base in enumerate((160, 390, 620, 850)):
@@ -263,6 +269,7 @@ class ParallaxBackground:
         screen.blit(self._rays, (0, 0))
 
     def _draw_mist(self, screen: pygame.Surface) -> None:
+        """Desliza as faixas de névoa em loop horizontal."""
         for mist, speed, y in self._mist_layers:
             span = mist.get_width()
             x = -int((self.time * (18 + speed * 40)) % span)
@@ -270,6 +277,7 @@ class ParallaxBackground:
             screen.blit(mist, (x + span, y))
 
     def _draw_motes(self, screen: pygame.Surface) -> None:
+        """Pinta os pontos de poeira/pólen com flicker."""
         layer = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
         for mote in self.motes:
             flicker = 0.4 + 0.6 * (0.5 + 0.5 * math.sin(mote["phase"] * 2.4))
@@ -283,11 +291,13 @@ class ParallaxBackground:
         screen.blit(layer, (0, 0))
 
     def _draw_leaves(self, screen: pygame.Surface) -> None:
+        """Desenha as folhas caindo no primeiro plano."""
         for leaf in self.leaves:
             stamp = pygame.transform.rotate(leaf["stamp"], leaf["rot"])
             screen.blit(stamp, stamp.get_rect(center=(int(leaf["x"]), int(leaf["y"]))))
 
     def draw_front(self, screen: pygame.Surface, focus: tuple[float, float]) -> None:
+        """Camada da frente: na travessia só as folhas, para não tapar o strip."""
         if self.mode == "crossing":
             self._draw_leaves(screen)
 
@@ -296,6 +306,7 @@ class ParallaxBackground:
         screen.blit(self._veil, (0, 0), special_flags=pygame.BLEND_MULT)
 
     def draw_world(self, screen: pygame.Surface, focus: tuple[float, float], corrupt: bool = False) -> None:
+        """Atalho: fundo + véu opcional (menu e cenas que não usam câmera)."""
         self.draw_back(screen, focus)
         if corrupt:
             self.draw_corrupt_veil(screen)
