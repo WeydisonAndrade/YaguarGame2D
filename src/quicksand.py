@@ -66,6 +66,8 @@ def swallowed(player) -> bool:
 
 def after_physics(player, dt: float) -> None:
     """Sobe o piso até os pés e, em seguida, puxa o corpo para baixo."""
+    if getattr(player, "swinging", False):
+        return
     pool = feet_in_quicksand(player.rect)
     sinking = getattr(player, "sand_sink", 0.0) > 0
     if pool is None and not sinking:

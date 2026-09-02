@@ -53,6 +53,7 @@ from src.config import (
 from src.color_profile import using_raw_bow_color
 from src.player_anim import load_player_frames, POSE_ANCHORS, RAW_BOW_SURFACES
 from src import quicksand
+from src import rope_swing
 
 
 _world_platforms = PLATFORMS
@@ -242,12 +243,28 @@ class YaguarPlayer(pygame.sprite.Sprite):
         self._pose_name = "idle"
         self.sand_rise = 0.0
         self.sand_sink = 0.0
+        self.swinging = False
+        self.on_vine = False
+        self.rope_ax = 0.0
+        self.rope_ay = 0.0
+        self.rope_len = 0.0
+        self.rope_len_from = 0.0
+        self.rope_reel = 0.0
+        self.rope_angle = 0.0
+        self.rope_omega = 0.0
+        self.rope_arrow = None
+        self.air_vx = 0.0
 
     @property
     def hurtbox(self) -> pygame.Rect:
         """Caixa de dano do tronco, menor que o sprite (arco e penas ficam de fora)."""
         w, h = 54, 110
         return pygame.Rect(self.rect.centerx - w // 2, self.rect.bottom - h, w, h)
+
+    def hand_anchor(self) -> tuple[float, float]:
+        """Mãos no alto do tronco — ponta da corda no balanço."""
+        body = self.hurtbox
+        return (float(body.centerx + self.facing * 10), float(body.top + 16))
 
     def _set_pose(self, name: str) -> None:
         """Troca o frame e espelha se estiver virado para a esquerda, mantendo os pés."""
@@ -284,6 +301,11 @@ class YaguarPlayer(pygame.sprite.Sprite):
             elif right and not left:
                 self.facing = 1
         self._update_bow(keys, fire_held, dt)
+        if rope_swing.active(self):
+            rope_swing.step(self, keys, dt)
+            if rope_swing.active(self):
+                rope_swing.apply_pose(self)
+                return
 
         # Recupera fôlego quando não está sprintando
         if self.stamina < self.max_stamina and not (keys[pygame.K_LSHIFT] and not self.crouching):
@@ -341,6 +363,11 @@ class YaguarPlayer(pygame.sprite.Sprite):
             if not self.attacking:
                 self.facing = 1 if dx > 0 else -1
             self.rect.x += int(dx * speed)
+        if not self.on_ground and abs(getattr(self, "air_vx", 0.0)) > 0.2:
+            self.rect.x += int(self.air_vx)
+            self.air_vx *= 0.978
+        elif self.on_ground:
+            self.air_vx = 0.0
         if (
             want_jump
             and self.on_ground
@@ -574,6 +601,8 @@ class YaguarPlayer(pygame.sprite.Sprite):
         sx += math.cos(self.aim_angle) * 6.0
         sy += math.sin(self.aim_angle) * 6.0
         self.pending_arrow = Arrow(sx, sy, self.aim_angle, speed, damage, owner="player")
+        if rope_swing.in_zone(self):
+            self.pending_arrow.roped = True
         self.rect.x -= self.facing * 4
         self.bow_state = "shoot"
         self.bow_recover = BOW_RECOVER
@@ -957,6 +986,8 @@ class Arrow(pygame.sprite.Sprite):
         self.stuck = False
         self.stuck_life = BOW_STUCK_TIME
         self.world_hit = False
+        self.roped = False
+        self.anchor_hit = False
         self._base = _arrow_image()
         self.image = self._base
         self.rect = self.image.get_rect(center=(int(self.fx), int(self.fy)))
@@ -973,7 +1004,10 @@ class Arrow(pygame.sprite.Sprite):
         return pygame.Rect(int(tx) - 3, int(ty) - 3, 7, 7)
 
     def _orient(self) -> None:
-        ang = -math.degrees(math.atan2(self.vy, self.vx))
+        if self.stuck and hasattr(self, "_flight_ux"):
+            ang = -math.degrees(math.atan2(self._flight_uy, self._flight_ux))
+        else:
+            ang = -math.degrees(math.atan2(self.vy, self.vx))
         self.image = pygame.transform.rotate(self._base, ang)
         self.rect = self.image.get_rect(center=(int(self.fx), int(self.fy)))
 
@@ -1038,6 +1072,11 @@ class Arrow(pygame.sprite.Sprite):
         self.fy += self.vy * dt
         self.life -= dt
         self._orient()
+        if self.roped:
+            hit = rope_swing.tree_hit_point(self)
+            if hit is not None:
+                rope_swing.embed_arrow(self, hit[0], hit[1])
+                return
         if self._hit_world():
             self._stick()
             self.world_hit = True

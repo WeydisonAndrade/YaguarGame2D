@@ -21,6 +21,7 @@ from src.config import (SCREEN_WIDTH, SCREEN_HEIGHT, COLOR_TEXT, COLOR_GOLD,
 from src.entities import YaguarPlayer, SpectralJaguar, MapinguariBoss, HerbItem, Arrow
 from src.fx import blit_flashed
 from src import quicksand
+from src import rope_swing
 from src.ui import PauseOverlay, RitualHUD, RitualMenu, SynopsisPlate
 from src.cinematic import CinematicSequence
 
@@ -135,6 +136,7 @@ def _respawn_from_fall(game) -> None:
     game.player.air_state = "grounded"
     game.player.invuln = 26
     quicksand.reset(game.player)
+    rope_swing.reset(game.player)
     max_cam = max(0, FOREST_WORLD_WIDTH - SCREEN_WIDTH)
     game.camera_x = max(0, min(max_cam, game.player.rect.centerx - SCREEN_WIDTH // 2))
     game.fx.player_hurt(game.player.hurtbox.centerx, game.player.hurtbox.centery, TRAIL_FALL_DAMAGE, False)
@@ -225,6 +227,7 @@ def _draw_fendas_debug(game, screen) -> None:
             pygame.draw.line(screen, color, (sx, 0), (sx, SCREEN_HEIGHT), 1)
     ck = game.player.checkpoint
     pygame.draw.circle(screen, (255, 220, 80), (int(ck[0] + ox), int(ck[1] - 8 + oy)), 6, 2)
+    rope_swing.draw_debug(screen, cam, oy)
     p = game.player
     lines = (
         f"world_x={p.rect.centerx}  cam={cam}  feet={p.rect.bottom}",
@@ -480,6 +483,10 @@ class PlayingState(GameState):
                     game.fx.arrow_impact(proj.fx, proj.fy, 0, 0, flesh=False)
                     audio.play_arrow_hit("rock")
                     continue
+                if getattr(proj, "anchor_hit", False):
+                    proj.anchor_hit = False
+                    rope_swing.attach(game.player, proj)
+                    continue
                 if getattr(proj, "spent", False):
                     continue
                 for enemy in list(game.enemies):
@@ -607,6 +614,7 @@ class PlayingState(GameState):
                 quicksand.draw(screen, game.player, (ox, oy))
                 continue
             blit_flashed(screen, spr, (ox, oy))
+        rope_swing.draw(screen, game.player, game.projectiles, cam, (ox, oy))
         if game.player.bow_state:
             game.player.draw_bow(screen, (ox, oy))
         game.fx.draw_spear_magic(screen, game.player, cam)
