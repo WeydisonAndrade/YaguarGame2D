@@ -42,7 +42,11 @@ FOREST_NEAR = PARALLAX_DIR / "forest1.png"
 FENDAS_FAR = PARALLAX_DIR / "forest_fendas_far.png"
 
 # No PNG 1536×1024 da clareira, o lábio da grama (medida na arte).
-TRAIL_SRC_GROUND_Y = 457
+TRAIL_SRC_GROUND_Y = 500
+# No forest1 1024×682, o lábio da laje de pedra.
+FOREST_SRC_GROUND_Y = 544
+# Arena do Mapinguari 1024×600: topo do chão pintado.
+BOSS_SRC_GROUND_Y = 511
 
 
 def _first_file(candidates: tuple[Path, ...]) -> Path | None:
@@ -105,6 +109,28 @@ def _frame_to_ground(src: Image.Image, src_ground_y: int) -> Image.Image:
         Image.Resampling.LANCZOS,
     )
     return fitted.crop((0, 0, SCREEN_WIDTH, SCREEN_HEIGHT))
+
+
+def _align_to_feet(src: Image.Image, src_ground_y: int) -> Image.Image:
+    """Sobe o piso pintado até GROUND_Y, sem esticar se a arte já tiver altura sobrando."""
+    src = src.convert("RGB")
+    scale = SCREEN_WIDTH / src.width
+    nh = max(1, int(round(src.height * scale)))
+    scaled = src.resize((SCREEN_WIDTH, nh), Image.Resampling.LANCZOS)
+    gy = max(1, int(round(src_ground_y * scale)))
+    top = gy - GROUND_Y
+    if top > 0 and top + SCREEN_HEIGHT <= scaled.height:
+        return scaled.crop((0, top, SCREEN_WIDTH, top + SCREEN_HEIGHT))
+    if top > 0:
+        piece = scaled.crop((0, top, SCREEN_WIDTH, scaled.height))
+        out = Image.new("RGB", (SCREEN_WIDTH, SCREEN_HEIGHT), piece.getpixel((0, piece.height - 1)))
+        out.paste(piece, (0, 0))
+        fill_h = SCREEN_HEIGHT - piece.height
+        if fill_h > 0:
+            tail = piece.crop((0, piece.height - 1, SCREEN_WIDTH, piece.height))
+            out.paste(tail.resize((SCREEN_WIDTH, fill_h), Image.Resampling.NEAREST), (0, piece.height))
+        return out
+    return _frame_to_ground(src, src_ground_y)
 
 
 def _match_edge(art: Image.Image, neighbor: Image.Image) -> Image.Image:
@@ -260,7 +286,7 @@ def build_crossing_world() -> Path:
     if not FOREST_NEAR.is_file():
         raise FileNotFoundError("Este asset não existe atualmente no projeto: parallax/forest1.png")
 
-    left = _cover_crop(Image.open(FOREST_NEAR).convert("RGB"), SCREEN_WIDTH, SCREEN_HEIGHT)
+    left = _align_to_feet(Image.open(FOREST_NEAR).convert("RGB"), FOREST_SRC_GROUND_Y)
     valley = _load_valley()
     trail = Image.open(TRAIL_PATH).convert("RGB")
 

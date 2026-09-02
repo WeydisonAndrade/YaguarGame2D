@@ -318,3 +318,38 @@ def test_areia_continua_na_floresta_seguinte():
         assert grounded is True
     finally:
         set_physics_world(PLATFORMS, SCREEN_WIDTH, allow_pits=False)
+
+
+def test_areia_movedica_sobe_ate_os_pes_e_engole():
+    """Na floresta seguinte, pisar na poça não é queda livre: o piso sobe e depois afunda."""
+    from src.config import CONTINUE_SAND_POOLS, QUICKSAND_RECESS, QUICKSAND_SWALLOW_DEPTH
+    from src import quicksand
+
+    left, width = CONTINUE_SAND_POOLS[0]
+    player = type("Feet", (), {})()
+    player.rect = pygame.Rect(0, 0, 92, 168)
+    player.rect.midbottom = (left + width // 2, GROUND_Y)
+    player.on_ground = True
+    player.vel_y = 0.0
+    player.air_state = "grounded"
+    player.sand_rise = 0.0
+    player.sand_sink = 0.0
+
+    assert quicksand.feet_in_quicksand(player.rect) is not None
+    assert quicksand.can_jump(player) is False
+    assert quicksand.slow_factor(player) < 1.0
+
+    for _ in range(20):
+        quicksand.after_physics(player, 1.0 / 60.0)
+    assert player.sand_rise >= QUICKSAND_RECESS - 1
+    assert player.rect.bottom <= GROUND_Y + 8
+
+    for _ in range(240):
+        quicksand.after_physics(player, 1.0 / 60.0)
+    assert player.sand_sink >= QUICKSAND_SWALLOW_DEPTH
+    assert player.rect.bottom > GROUND_Y + 40
+    assert quicksand.swallowed(player) is True
+
+    safe = pygame.Rect(0, 0, 92, 168)
+    safe.midbottom = (200, GROUND_Y)
+    assert quicksand.feet_in_quicksand(safe) is None

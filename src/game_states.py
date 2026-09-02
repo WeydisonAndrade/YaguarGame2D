@@ -20,6 +20,7 @@ from src.config import (SCREEN_WIDTH, SCREEN_HEIGHT, COLOR_TEXT, COLOR_GOLD,
                         BOW_LOOKAHEAD, FPS)
 from src.entities import YaguarPlayer, SpectralJaguar, MapinguariBoss, HerbItem, Arrow
 from src.fx import blit_flashed
+from src import quicksand
 from src.ui import PauseOverlay, RitualHUD, RitualMenu, SynopsisPlate
 from src.cinematic import CinematicSequence
 
@@ -133,6 +134,7 @@ def _respawn_from_fall(game) -> None:
     game.player.on_ground = True
     game.player.air_state = "grounded"
     game.player.invuln = 26
+    quicksand.reset(game.player)
     max_cam = max(0, FOREST_WORLD_WIDTH - SCREEN_WIDTH)
     game.camera_x = max(0, min(max_cam, game.player.rect.centerx - SCREEN_WIDTH // 2))
     game.fx.player_hurt(game.player.hurtbox.centerx, game.player.hurtbox.centery, TRAIL_FALL_DAMAGE, False)
@@ -176,6 +178,8 @@ def _follow_camera(game) -> None:
 def _update_trail_checkpoint(player) -> None:
     """Grava o último ponto seguro no miolo de uma laje, para o respawn da queda."""
     if not player.on_ground:
+        return
+    if quicksand.feet_in_quicksand(player.rect):
         return
     for x, y, w, _h in FOREST_CROSSING_PLATFORMS:
         inset = 16 if w < 160 else 40
@@ -558,6 +562,10 @@ class PlayingState(GameState):
                 _respawn_from_fall(game)
                 if _defeat_player(game):
                     return
+            elif quicksand.swallowed(game.player):
+                _respawn_from_fall(game)
+                if _defeat_player(game):
+                    return
             if game.player.rect.centerx >= MAPINGUARI_GATE_X:
                 game.zone_stage = 2
                 self.current_zone = "Caminho da Montanha Sagrada"
@@ -583,7 +591,9 @@ class PlayingState(GameState):
         ox, oy = game.fx.ox - cam, game.fx.oy
         for herb in game.herbs:
             screen.blit(herb.image, herb.rect.move(ox, oy))
-        game.fx.draw_contact_shadow(screen, game.player, (ox, oy))
+        sinking = getattr(game.player, "sand_sink", 0) > 0
+        if not sinking:
+            game.fx.draw_contact_shadow(screen, game.player, (ox, oy))
         for spr in game.all_sprites:
             if (
                 spr is game.player
@@ -592,6 +602,9 @@ class PlayingState(GameState):
                 and game.player.invuln % 4 < 2
                 and getattr(game.player, "flash_timer", 0) <= 0
             ):
+                continue
+            if spr is game.player and sinking:
+                quicksand.draw(screen, game.player, (ox, oy))
                 continue
             blit_flashed(screen, spr, (ox, oy))
         if game.player.bow_state:

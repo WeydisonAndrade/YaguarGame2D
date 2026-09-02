@@ -314,3 +314,33 @@ def test_mira_nao_dispara_lanca(game, monkeypatch):
     assert game.player.attacking is False
     assert game.player.queued_attack is None
 
+
+def test_pisar_na_areia_movedica_engole_e_devolve_ao_checkpoint(game, monkeypatch):
+    """Só neste trecho: o piso sobe até os pés e o respawn é o da queda."""
+    from src.config import CONTINUE_SAND_POOLS, TRAIL_FALL_DAMAGE
+
+    _idle_keys(monkeypatch)
+    game.begin_forest_crossing()
+    start = game.player.health
+    ck = 400
+    game.player.checkpoint = (ck, TRAIL_GROUND_Y)
+    left, width = CONTINUE_SAND_POOLS[0]
+    game.player.rect.midbottom = (left + width // 2, TRAIL_GROUND_Y)
+    game.player.on_ground = True
+    game.player.vel_y = 0
+    game.player.sand_rise = 0.0
+    game.player.sand_sink = 0.0
+
+    for _ in range(280):
+        if not isinstance(game.state, PlayingState):
+            break
+        game.state.update(game)
+        if game.player.health < start:
+            break
+
+    assert isinstance(game.state, PlayingState)
+    assert game.player.health == start - TRAIL_FALL_DAMAGE
+    assert game.player.rect.centerx == ck
+    assert game.player.on_ground is True
+    assert game.player.sand_sink == 0
+

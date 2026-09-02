@@ -7,9 +7,16 @@ import random
 from pathlib import Path
 
 import pygame
+from PIL import Image
 
 from src.config import SCREEN_HEIGHT, SCREEN_WIDTH
-from src.trail_art import ensure_crossing_world, ensure_trail_art
+from src.trail_art import (
+    BOSS_SRC_GROUND_Y,
+    FOREST_SRC_GROUND_Y,
+    _align_to_feet,
+    ensure_crossing_world,
+    ensure_trail_art,
+)
 
 ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
 PARALLAX_DIR = ASSETS_DIR / "parallax"
@@ -35,6 +42,11 @@ LEAF_COLORS = (
     (168, 140, 64),
     (36, 72, 38),
 )
+
+
+def _pil_to_surf(im) -> pygame.Surface:
+    """Converte uma pintura PIL já alinhada aos pés em Surface do Pygame."""
+    return pygame.image.fromstring(im.tobytes(), im.size, im.mode).convert()
 
 
 def _cover_scale(raw: pygame.Surface, tw: int, th: int) -> pygame.Surface:
@@ -83,12 +95,15 @@ class ParallaxBackground:
                 path = PARALLAX_DIR / fallback if fallback else path
             if not path.exists():
                 continue
-            raw = pygame.image.load(str(path)).convert()
             if filename == BOSS_ARENA_FILE:
-                # Arena de combate: a pintura preenche a tela sem zoom extra.
                 self.boss_index = len(self.scenes)
-                self.scenes.append(_cover_scale(raw, SCREEN_WIDTH, SCREEN_HEIGHT))
+                aligned = _align_to_feet(Image.open(path).convert("RGB"), BOSS_SRC_GROUND_Y)
+                self.scenes.append(_pil_to_surf(aligned))
+            elif filename == "forest1.png":
+                aligned = _align_to_feet(Image.open(path).convert("RGB"), FOREST_SRC_GROUND_Y)
+                self.scenes.append(_pil_to_surf(aligned))
             else:
+                raw = pygame.image.load(str(path)).convert()
                 self.scenes.append(_cover_scale(raw, *target))
 
         if not self.scenes:

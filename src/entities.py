@@ -52,6 +52,7 @@ from src.config import (
 )
 from src.color_profile import using_raw_bow_color
 from src.player_anim import load_player_frames, POSE_ANCHORS, RAW_BOW_SURFACES
+from src import quicksand
 
 
 _world_platforms = PLATFORMS
@@ -239,6 +240,8 @@ class YaguarPlayer(pygame.sprite.Sprite):
         self._bow_fire_held = False
         self._bow_need_release = False
         self._pose_name = "idle"
+        self.sand_rise = 0.0
+        self.sand_sink = 0.0
 
     @property
     def hurtbox(self) -> pygame.Rect:
@@ -321,6 +324,7 @@ class YaguarPlayer(pygame.sprite.Sprite):
             and self.stamina > 1
         )
         speed = PLAYER_RUN_SPEED if running else PLAYER_WALK_SPEED
+        speed *= quicksand.slow_factor(self)
         if self.attacking:
             speed *= 0.45
         if aiming:
@@ -340,6 +344,7 @@ class YaguarPlayer(pygame.sprite.Sprite):
         if (
             want_jump
             and self.on_ground
+            and quicksand.can_jump(self)
             and not self.crouching
             and not self.blocking
             and not self.attacking
@@ -349,6 +354,7 @@ class YaguarPlayer(pygame.sprite.Sprite):
             self.on_ground = False
 
         self.rect, self.vel_y, self.on_ground = apply_gravity_and_platforms(self.rect, self.vel_y, self.on_ground)
+        quicksand.after_physics(self, dt)
         if self.on_ground:
             self.air_state = "grounded"
             self.safe_feet = (self.rect.centerx, self.rect.bottom)
