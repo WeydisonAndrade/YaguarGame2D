@@ -170,3 +170,88 @@ def test_fenda_pintada_nao_tem_chao():
         assert grounded is False
     finally:
         set_physics_world(PLATFORMS, SCREEN_WIDTH, allow_pits=False)
+
+
+def test_clareira_continua_na_areia():
+    """A última laje da clareira encosta na primeira da areia, sem degrau."""
+    from src.config import (
+        FOREST_CROSSING_PLATFORMS,
+        FOREST_WORLD_WIDTH,
+        PLATFORMS,
+        SAND_A_X,
+        SAND_ORIGIN_X,
+        TRAIL_C_X,
+        TRAIL_PLATFORM_C_WIDTH,
+    )
+
+    assert TRAIL_C_X + TRAIL_PLATFORM_C_WIDTH == SAND_ORIGIN_X == SAND_A_X
+    set_physics_world(FOREST_CROSSING_PLATFORMS, FOREST_WORLD_WIDTH, allow_pits=True)
+    try:
+        rect = pygame.Rect(0, 0, 92, 168)
+        rect.midbottom = (SAND_ORIGIN_X, GROUND_Y)
+        _, _, grounded = apply_gravity_and_platforms(rect, 0.0, True)
+        assert grounded is True
+    finally:
+        set_physics_world(PLATFORMS, SCREEN_WIDTH, allow_pits=False)
+
+
+def test_andar_sem_pular_cai_nas_fendas_da_areia():
+    """Andar para a frente, sem pulo, não atravessa a areia movediça."""
+    from src.config import FOREST_WORLD_WIDTH, PLATFORMS, SAND_PLATFORMS, TRAIL_GROUND_Y
+
+    set_physics_world(SAND_PLATFORMS, FOREST_WORLD_WIDTH, allow_pits=True)
+    try:
+        plats = [pygame.Rect(*box) for box in SAND_PLATFORMS]
+        for prev, nxt in zip(plats, plats[1:]):
+            rect = _lip_rect(prev, TRAIL_GROUND_Y)
+            vel_y = 0.0
+            grounded = True
+            fell = False
+            for _ in range(50):
+                rect.x += 4
+                rect, vel_y, grounded = apply_gravity_and_platforms(rect, vel_y, grounded)
+                if not grounded and rect.centerx > prev.right:
+                    fell = True
+                    break
+            assert fell, f"atravessou a fenda {prev.right}–{nxt.left} andando"
+    finally:
+        set_physics_world(PLATFORMS, SCREEN_WIDTH, allow_pits=False)
+
+
+def test_fendas_da_areia_nao_tem_chao():
+    """As duas fendas da segunda clareira engolem o personagem se ele não pular."""
+    from src.config import FOREST_WORLD_WIDTH, PLATFORMS, SAND_PLATFORMS, TRAIL_GROUND_Y
+
+    set_physics_world(SAND_PLATFORMS, FOREST_WORLD_WIDTH, allow_pits=True)
+    try:
+        plats = [pygame.Rect(*box) for box in SAND_PLATFORMS]
+        for prev, nxt in zip(plats, plats[1:]):
+            gap_x = (prev.right + nxt.left) // 2
+            rect = pygame.Rect(0, 0, 92, 168)
+            rect.midbottom = (gap_x, TRAIL_GROUND_Y)
+            _, _, grounded = apply_gravity_and_platforms(rect, 0.0, True)
+            assert grounded is False, f"andou sobre a fenda em x={gap_x} ({prev.right}–{nxt.left})"
+    finally:
+        set_physics_world(PLATFORMS, SCREEN_WIDTH, allow_pits=False)
+
+
+def test_pulo_a_pe_cruza_as_fendas_da_areia():
+    from src.config import FOREST_WORLD_WIDTH, PLATFORMS, SAND_PLATFORMS, TRAIL_GROUND_Y
+
+    set_physics_world(SAND_PLATFORMS, FOREST_WORLD_WIDTH, allow_pits=True)
+    try:
+        plats = [pygame.Rect(*box) for box in SAND_PLATFORMS]
+        for prev, nxt in zip(plats, plats[1:]):
+            rect = _lip_rect(prev, TRAIL_GROUND_Y)
+            vel_y = JUMP_VELOCITY
+            grounded = False
+            landed = False
+            for _ in range(55):
+                rect.x += 4
+                rect, vel_y, grounded = apply_gravity_and_platforms(rect, vel_y, grounded)
+                if grounded and rect.centerx > prev.right:
+                    landed = True
+                    break
+            assert landed, f"falhou {prev.right} → {nxt.left}"
+    finally:
+        set_physics_world(PLATFORMS, SCREEN_WIDTH, allow_pits=False)

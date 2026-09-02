@@ -153,7 +153,7 @@ class ParallaxBackground:
         return self.mode == "scene" and self.index == self.boss_index
 
     def use_crossing(self) -> None:
-        """Arena e clareira no mesmo mundo: a câmera desliza pelo strip contínuo."""
+        """Arena, clareira e areia no mesmo mundo: a câmera desliza pelo strip contínuo."""
         self.mode = "crossing"
         self.index = 0
         if self.crossing_world is None and self.trail is None:
@@ -224,7 +224,7 @@ class ParallaxBackground:
         focus: tuple[float, float],
         camera_x: float = 0,
     ) -> None:
-        """Camada de fundo: com o caminho aberto, arena e clareira formam um mundo só."""
+        """Camada de fundo: com o caminho aberto, arena, clareira e areia formam um mundo só."""
         if self.mode == "crossing":
             self._draw_continuous(screen, focus, camera_x)
             return

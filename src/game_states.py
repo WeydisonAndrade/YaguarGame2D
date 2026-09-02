@@ -12,7 +12,7 @@ from src.config import (SCREEN_WIDTH, SCREEN_HEIGHT, COLOR_TEXT, COLOR_GOLD,
                         COLOR_RED, COLOR_SCARLET, TOTAL_HERBS_TO_COLLECT, GROUND_Y,
                         ONCA_WAVE_TOTAL, ONCA_WAVE_KINDS, MAPINGUARI_GATE_X, TRAIL_FALL_DAMAGE,
                         TRAIL_FALL_Y, FOREST_CROSSING_PLATFORMS, FOREST_WORLD_WIDTH,
-                        TRAIL_ORIGIN_X,
+                        TRAIL_ORIGIN_X, SAND_ORIGIN_X,
                         CAMERA_ANCHOR_FWD, CAMERA_ANCHOR_BACK,
                         CAMERA_DEADZONE, CAMERA_LERP,
                         KEY_ATTACK, KEY_COLOR_COMPARE, MOUSE_ATTACK, MOUSE_HEAVY,
@@ -187,6 +187,8 @@ def _crossing_zone_label(player) -> str:
     x = player.rect.centerx
     if x >= MAPINGUARI_GATE_X - 80:
         return "Caminho da Montanha Sagrada"
+    if x >= SAND_ORIGIN_X:
+        return "Areia movediça — pule as fendas"
     if x >= TRAIL_ORIGIN_X:
         return "Clareira — pule sobre as fendas"
     return "Floresta — o caminho se abre"
@@ -200,7 +202,11 @@ def _draw_fendas_debug(game, screen) -> None:
     for box in FOREST_CROSSING_PLATFORMS:
         pygame.draw.rect(screen, (80, 220, 255), pygame.Rect(*box).move(ox, oy), 2)
     pygame.draw.line(screen, (220, 50, 50), (0, TRAIL_FALL_Y), (SCREEN_WIDTH, TRAIL_FALL_Y), 1)
-    for seam, color in ((TRAIL_ORIGIN_X, (255, 180, 40)), (MAPINGUARI_GATE_X, (220, 80, 80))):
+    for seam, color in (
+        (TRAIL_ORIGIN_X, (255, 180, 40)),
+        (SAND_ORIGIN_X, (210, 160, 70)),
+        (MAPINGUARI_GATE_X, (220, 80, 80)),
+    ):
         sx = seam - cam
         if 0 <= sx <= SCREEN_WIDTH:
             pygame.draw.line(screen, color, (sx, 0), (sx, SCREEN_HEIGHT), 1)

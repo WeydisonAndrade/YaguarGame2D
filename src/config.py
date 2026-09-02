@@ -140,9 +140,33 @@ TRAIL_PLATFORMS = (
     (TRAIL_C_X, TRAIL_GROUND_Y, TRAIL_PLATFORM_C_WIDTH, TRAIL_LEDGE_HEIGHT),
 )
 
-FOREST_WORLD_WIDTH = TRAIL_WORLD_WIDTH
-MAPINGUARI_GATE_X = TRAIL_WORLD_WIDTH - 72
-FOREST_CROSSING_PLATFORMS = PLATFORMS + TRAIL_PLATFORMS
+# ---------------------------------------------------------------------------
+# Areia movediça — continua a clareira à direita (mesmo chão, mesmas fendas).
+# Arte 1024×600: A 0–241 | fenda 71 | B 312–502 | fenda 58 | C 560–1024
+# O corpo do Yáguar (~92 px, pés ~68 px) é mais largo que essas fendas pintadas:
+# a colisão recua os lábios (~20 px) para ele cair no vão, não andar no ar.
+# Os dois vãos ainda cabem no pulo a pé (~156 px).
+# ---------------------------------------------------------------------------
+SAND_ORIGIN_X = TRAIL_WORLD_WIDTH
+SAND_ART_GROUND_Y = 252
+SAND_A_X = SAND_ORIGIN_X + 0
+SAND_PLATFORM_A_WIDTH = 221
+SAND_B_X = SAND_ORIGIN_X + 332
+SAND_PLATFORM_B_WIDTH = 150
+SAND_C_X = SAND_ORIGIN_X + 580
+SAND_PLATFORM_C_WIDTH = SCREEN_WIDTH - 580
+SAND_GAP_1_WIDTH = SAND_B_X - (SAND_A_X + SAND_PLATFORM_A_WIDTH)
+SAND_GAP_2_WIDTH = SAND_C_X - (SAND_B_X + SAND_PLATFORM_B_WIDTH)
+SAND_PLATFORMS = (
+    (SAND_A_X, TRAIL_GROUND_Y, SAND_PLATFORM_A_WIDTH, TRAIL_LEDGE_HEIGHT),
+    (SAND_B_X, TRAIL_GROUND_Y, SAND_PLATFORM_B_WIDTH, TRAIL_MID_LEDGE_HEIGHT),
+    (SAND_C_X, TRAIL_GROUND_Y, SAND_PLATFORM_C_WIDTH, TRAIL_LEDGE_HEIGHT),
+)
+SAND_WORLD_WIDTH = SAND_ORIGIN_X + SCREEN_WIDTH
+
+FOREST_WORLD_WIDTH = SAND_WORLD_WIDTH
+MAPINGUARI_GATE_X = FOREST_WORLD_WIDTH - 72
+FOREST_CROSSING_PLATFORMS = PLATFORMS + TRAIL_PLATFORMS + SAND_PLATFORMS
 
 # Câmera da travessia: Yáguar fica ~40% da tela ao avançar, para ver o caminho.
 CAMERA_ANCHOR_FWD = 0.40

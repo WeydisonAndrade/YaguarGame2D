@@ -70,6 +70,7 @@ def test_sprites_essenciais_existem_no_pacote():
     assert (ASSETS / "parallax" / "forest_fendas_clean.png").is_file()
     assert (ASSETS / "parallax" / "forest_trail.png").is_file()
     assert (ASSETS / "parallax" / "forest_crossing.png").is_file()
+    assert (ASSETS / "parallax" / "forest_sand_fendas.png").is_file()
 
 
 def test_clareira_e_pintura_estatica():
@@ -117,16 +118,22 @@ def test_travessia_nao_repete_a_floresta_da_arena():
     assert world.size[0] == FOREST_WORLD_WIDTH
 
 
-def test_mundo_da_travessia_termina_na_clareira():
+def test_mundo_da_travessia_termina_na_areia():
     from PIL import Image
 
-    from src.config import FOREST_WORLD_WIDTH, TRAIL_WORLD_WIDTH
+    from src.config import FOREST_WORLD_WIDTH, SAND_ORIGIN_X, SAND_WORLD_WIDTH, TRAIL_WORLD_WIDTH
     from src.trail_art import CROSSING_PATH, ensure_crossing_world
 
     ensure_crossing_world()
     world = Image.open(CROSSING_PATH)
-    assert world.size == (TRAIL_WORLD_WIDTH, SCREEN_HEIGHT)
-    assert FOREST_WORLD_WIDTH == TRAIL_WORLD_WIDTH
+    assert world.size == (SAND_WORLD_WIDTH, SCREEN_HEIGHT)
+    assert FOREST_WORLD_WIDTH == SAND_WORLD_WIDTH
+    assert SAND_ORIGIN_X == TRAIL_WORLD_WIDTH
+    seam = SAND_ORIGIN_X
+    left = list(world.getpixel((seam - 8, 80)))
+    right = list(world.getpixel((seam + 8, 80)))
+    delta = sum(abs(a - b) for a, b in zip(left, right))
+    assert delta < 110
 
 
 def _opaque_paper_pixels(path: Path, luma_min: float = 220) -> int:

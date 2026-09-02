@@ -64,8 +64,9 @@ Menu  →  Cinemática  →  Partida  →  Pausa
 1. Derrotar **3 onças** (pintada, pantera e espectral, uma de cada vez).
 2. A terceira onça **libera a Garra Espiritual**.
 3. Andar à direita na mesma floresta até a **clareira das fendas** (é possível voltar à arena). Pular as fendas na grama.
-4. No lado direito das fendas abre a cinemática; em seguida surge o **Mapinguari**.
-5. Derrotar o chefe conclui a prova.
+4. A clareira continua na **areia movediça**: pule as fendas para não afundar.
+5. No lado direito da areia abre a cinemática; em seguida surge o **Mapinguari**.
+6. Derrotar o chefe conclui a prova.
 
 Três **ervas sagradas** estão no chão. Andar perto (ou `E` junto delas) **colhe** para o bolso. Com uma erva guardada, `E` cura **25** de vida, até o máximo de 100.
 
