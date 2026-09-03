@@ -83,6 +83,39 @@ def test_terceira_onca_abre_a_clareira_e_depois_o_mapinguari(game, monkeypatch):
     assert game.parallax.mode == "scene"
     assert game.parallax.is_boss_arena()
     assert game.zone_stage == 2
+    assert len(game.herbs) == 0
+    assert game.player.swinging is False
+
+
+def test_entrada_do_mapinguari_solta_a_corda_e_limpa_a_travessia(game, monkeypatch):
+    """A arena do chefe não herda pêndulo, ervas nem flechas do caminho."""
+    from src.config import CONTINUE_DRAW_X
+    from src.entities import Arrow
+    from src.game_states import BossCinematicState
+
+    _idle_keys(monkeypatch)
+    game.begin_forest_crossing()
+    game.sand_cinematic_done = True
+    game.player.swinging = True
+    game.player.on_vine = True
+    game.player.rope_ax = CONTINUE_DRAW_X + 900
+    game.player.rope_ay = 120.0
+    game.player.rope_len = 220.0
+    game.player.rope_angle = 0.4
+    game.player.rope_omega = 0.05
+    game.projectiles.add(Arrow(CONTINUE_DRAW_X + 80, 200, 0.0, 200, 10))
+    game.player.rect.midbottom = (MAPINGUARI_GATE_X, TRAIL_GROUND_Y)
+    game.player.on_ground = True
+    game.state.update(game)
+    assert isinstance(game.state, BossCinematicState)
+    game.state.handle_events(game, pygame.event.Event(pygame.KEYDOWN, key=pygame.K_SPACE))
+
+    assert isinstance(game.state, PlayingState)
+    assert game.player.swinging is False
+    assert game.player.on_vine is False
+    assert game.player.rect.centerx < SCREEN_WIDTH
+    assert len(game.herbs) == 0
+    assert len(game.projectiles) == 0
 
 
 def test_queda_na_clareira_fere_e_devolve_ao_checkpoint(game, monkeypatch):

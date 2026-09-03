@@ -10,6 +10,7 @@ import random
 import pygame
 from src import audio
 from src import quicksand
+from src import rope_swing
 from src.config import (
     SCREEN_WIDTH,
     SCREEN_HEIGHT,
@@ -111,9 +112,14 @@ class Game:
         self.zone_stage = 2
         self.player.rect.midbottom = (180, GROUND_Y)
         self.player.vel_y = 0
+        self.player.air_vx = 0.0
         self.player.on_ground = True
         self.player.air_state = "grounded"
         quicksand.reset(self.player)
+        rope_swing.reset(self.player)
+        for group in (self.herbs, self.projectiles, self.attack_hitboxes):
+            for spr in list(group):
+                spr.kill()
         self.parallax.use_boss_arena()
         boss = MapinguariBoss(SCREEN_WIDTH - 220, GROUND_Y)
         self.enemies.add(boss)
